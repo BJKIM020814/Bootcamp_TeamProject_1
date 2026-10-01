@@ -1,4 +1,5 @@
 import 'package:bootcamp_teamproject_1/discover/product_detail_page.dart';
+import 'package:bootcamp_teamproject_1/user/authController.dart';
 import 'package:flutter/material.dart';
 
 class ProductListPage extends StatefulWidget {
@@ -87,10 +88,7 @@ class _ProductListPageState extends State<ProductListPage> {
             onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('장바구니 기능은 서버 연결 후 사용할 수 있습니다.')),
             ),
-            icon: const Badge(
-              label: Text('1'),
-              child: Icon(Icons.shopping_bag_outlined),
-            ),
+            icon: const CartBadgeIcon(),
             tooltip: '장바구니 보기',
           ),
         ],
