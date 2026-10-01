@@ -1,7 +1,13 @@
+import 'package:bootcamp_teamproject_1/user/mypage/customersupportpage.dart';
+import 'package:bootcamp_teamproject_1/user/mypage/fitpick_mypage_ui.dart';
+import 'package:bootcamp_teamproject_1/user/mypage/notificationpage.dart';
+import 'package:bootcamp_teamproject_1/user/mypage/recentlyviewedpage.dart';
+import 'package:bootcamp_teamproject_1/user/mypage/reviewmanagementpage.dart';
+import 'package:bootcamp_teamproject_1/user/mypage/reviewwritepage.dart';
+import 'package:bootcamp_teamproject_1/user/mypage/settingspage.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 
-import 'discover/home.dart';
 import 'firebase_options.dart';
 import 'services/erd_seed_service.dart';
 
@@ -21,8 +27,10 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Firebase ERD',
-      theme: ThemeData(colorScheme: .fromSeed(seedColor: Colors.deepPurple)),
-      home: const Home(),
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+      ),
+      home: const SettingsPage(),
     );
   }
 }
