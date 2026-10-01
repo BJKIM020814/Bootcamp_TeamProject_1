@@ -5,7 +5,10 @@ class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) return web;
     if (defaultTargetPlatform == TargetPlatform.iOS) return ios;
-    throw UnsupportedError('Firebase is configured for iOS and web only.');
+    if (defaultTargetPlatform == TargetPlatform.android) return android;
+    throw UnsupportedError(
+      'Firebase is configured for iOS, Android, and web only.',
+    );
   }
 
   static const FirebaseOptions ios = FirebaseOptions(
@@ -15,6 +18,14 @@ class DefaultFirebaseOptions {
     projectId: 'shoe-20260930',
     storageBucket: 'shoe-20260930.firebasestorage.app',
     iosBundleId: 'com.example.bootcampTeamproject1',
+  );
+
+  static const FirebaseOptions android = FirebaseOptions(
+    apiKey: 'AIzaSyDYv4HzxB2jhwgH7Mo9a3To8mEMHbg_19Y',
+    appId: '1:864946455276:android:48c5863e7b2b6ea5aa1bc9',
+    messagingSenderId: '864946455276',
+    projectId: 'shoe-20260930',
+    storageBucket: 'shoe-20260930.firebasestorage.app',
   );
 
   static const FirebaseOptions web = FirebaseOptions(
