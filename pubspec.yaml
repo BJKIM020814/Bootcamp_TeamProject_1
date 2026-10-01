@@ -36,26 +36,26 @@ dependencies:
   cupertino_icons: ^1.0.8
 
   # GetX
-get: ^4.7.3
+  get: ^4.7.3
 #SQFLite
-sqflite: ^2.4.4
+  sqflite: ^2.4.4
 # imagePicker
-image_picker: ^1.2.3
+  image_picker: ^1.2.3
 # Map
-flutter_map: ^8.3.2
+  flutter_map: ^8.3.2
 # geolocator
-geolocator: ^14.1.1
+  geolocator: ^14.1.1
 # latlong2
-latlong2: ^0.10.1 # 지도를 현 위치로 이동
+  latlong2: ^0.10.1 # 지도를 현 위치로 이동
 # Slidable
-flutter_slidable: ^4.0.3
+  flutter_slidable: ^4.0.3
 # http
-http: ^1.6.0
+  http: ^1.6.0
 # firebase
-firebase_core: ^4.15.0
+  firebase_core: ^4.15.0
 # Firebae Storage
-firebase_storage: ^13.6.0
-cloud_firestore: ^6.10.0
+  firebase_storage: ^13.6.0
+  cloud_firestore: ^6.10.0
 
 dev_dependencies:
   flutter_test:
@@ -77,6 +77,8 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+  assets:
+    - tool/erd_seed.json
 
   # To add assets to your application, add an assets section, like this:
   # assets:
