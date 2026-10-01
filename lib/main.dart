@@ -1,8 +1,8 @@
-import 'package:bootcamp_teamproject_1/user/mypage/my_page.dart';
+import 'package:bootcamp_teamproject_1/discover/splash_page.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:google_fonts/google_fonts.dart';
 
-import 'discover/home.dart';
 import 'firebase_options.dart';
 import 'services/erd_seed_service.dart';
 
@@ -21,9 +21,15 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Firebase ERD',
-      theme: ThemeData(colorScheme: .fromSeed(seedColor: Colors.deepPurple)),
-      home: const Home(),
+      title: 'FitPick',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF6C4EFF)),
+        scaffoldBackgroundColor: const Color(0xFFFFFDF9),
+        useMaterial3: true,
+        textTheme: GoogleFonts.notoSansKrTextTheme(),
+      ),
+      home: const SplashPage(),
     );
   }
 }
