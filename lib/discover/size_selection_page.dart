@@ -1,4 +1,5 @@
 import 'package:bootcamp_teamproject_1/discover/store_selection_page.dart';
+import 'package:bootcamp_teamproject_1/user/authController.dart';
 import 'package:flutter/material.dart';
 
 class SizeSelectionPage extends StatefulWidget {
@@ -26,10 +27,7 @@ class _SizeSelectionPageState extends State<SizeSelectionPage> {
         actions: [
           IconButton(
             onPressed: () {},
-            icon: const Badge(
-              label: Text('1'),
-              child: Icon(Icons.shopping_bag_outlined),
-            ),
+            icon: const CartBadgeIcon(),
           ),
         ],
       ),

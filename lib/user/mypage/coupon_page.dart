@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+
+import 'package:bootcamp_teamproject_1/discover/product_list_page.dart';
 
 import 'mypage_common.dart';
 import 'mypage_sample_data.dart';
@@ -40,9 +43,7 @@ class CouponPage extends StatelessWidget {
           SizedBox(
             height: 56,
             child: OutlinedButton(
-              onPressed: () {
-                // TODO: 상품 탐색 화면 이동
-              },
+              onPressed: () => Get.to(() => const ProductListPage()),
               style: OutlinedButton.styleFrom(
                 foregroundColor: MpColors.ink,
                 side: const BorderSide(color: MpColors.line),

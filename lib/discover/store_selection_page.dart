@@ -1,3 +1,4 @@
+import 'package:bootcamp_teamproject_1/user/authController.dart';
 import 'package:flutter/material.dart';
 
 class StoreSelectionPage extends StatefulWidget {
@@ -31,10 +32,7 @@ class _StoreSelectionPageState extends State<StoreSelectionPage> {
         actions: [
           IconButton(
             onPressed: () {},
-            icon: const Badge(
-              label: Text('1'),
-              child: Icon(Icons.shopping_bag_outlined),
-            ),
+            icon: const CartBadgeIcon(),
           ),
         ],
       ),
