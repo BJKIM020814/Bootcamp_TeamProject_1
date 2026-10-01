@@ -1,0 +1,139 @@
+[
+  {
+    "collection": "account",
+    "id": "CUS-001",
+    "fields": {
+      "email": "user@example.com",
+      "password": "TEST_ONLY_password_001",
+      "phoneNumber": "010-0000-0000",
+      "name": "테스트회원",
+      "gender": "남성",
+      "address": "테스트 주소",
+      "signupPath": "이메일"
+    }
+  },
+  {
+    "collection": "employee",
+    "id": "EMP-001",
+    "fields": {
+      "employeeId": "EMP-001",
+      "password": "TEST_ONLY_employee_001",
+      "position": "대리",
+      "department": "상품관리부",
+      "businessNumber": "TEST_ONLY_BUSINESS_NUMBER"
+    }
+  },
+  {
+    "collection": "manufactor",
+    "id": "MFG-001",
+    "fields": {
+      "manufacturerId": "MFG-001",
+      "manufacturerName": "테스트제조사",
+      "address": "테스트 제조사 주소"
+    }
+  },
+  {
+    "collection": "quotation",
+    "id": "QUO-001",
+    "fields": {
+      "supplyPrice": 8000000,
+      "productName": "테스트 러닝화",
+      "unitPrice": 80000,
+      "quantity": 100,
+      "seq": 1,
+      "quotedAt": "2026-09-30T10:00:00Z",
+      "managerName": "테스트담당자"
+    }
+  },
+  {
+    "collection": "distributor_inventory",
+    "id": "AGENCY-SEOUL-SH-001",
+    "fields": {
+      "branchName": "테스트지점",
+      "quantity": 20,
+      "productId": "SH-001"
+    }
+  },
+  {
+    "collection": "office_inventory",
+    "id": "HQ-001",
+    "fields": {
+      "productId": "SH-001",
+      "minimumQuantity": 10
+    }
+  },
+  {
+    "collection": "connect",
+    "id": "CONNECT-001",
+    "fields": {
+      "email": "user@example.com",
+      "employeeId": "EMP-001",
+      "connectedAt": "2026-09-30T10:00:00Z",
+      "accessLocation": "테스트 접속위치",
+      "ipAddress": "192.0.2.1"
+    }
+  },
+  {
+    "collection": "change",
+    "id": "CHANGE-001",
+    "fields": {
+      "email": "user@example.com",
+      "employeeId": "EMP-001",
+      "changedAt": "2026-09-30T10:00:00Z"
+    }
+  },
+  {
+    "collection": "resister",
+    "id": "CUS-001",
+    "fields": {
+      "email": "user@example.com",
+      "employeeId": "EMP-001",
+      "registeredAt": "2026-09-30T10:00:00Z"
+    }
+  },
+  {
+    "collection": "recieve",
+    "id": "RECIEVE-001",
+    "fields": {
+      "employeeId": "EMP-001",
+      "manufacturerId": "MFG-001",
+      "receivedAt": "2026-09-30T10:00:00Z",
+      "quantity": 100,
+      "productId": "SH-001"
+    }
+  },
+  {
+    "collection": "order",
+    "id": "ORD-001",
+    "fields": {
+      "employeeId": "EMP-001",
+      "manufacturerId": "MFG-001",
+      "productId": "SH-001",
+      "orderedAt": "2026-09-30T10:00:00Z",
+      "quantity": 100,
+      "quotationSeq": 1
+    }
+  },
+  {
+    "collection": "send",
+    "id": "SHIP-001",
+    "fields": {
+      "employeeId": "EMP-001",
+      "branchName": "테스트지점",
+      "quantity": 20,
+      "sentAt": "2026-09-30T10:00:00Z",
+      "isReceived": false
+    }
+  },
+  {
+    "collection": "registration",
+    "id": "REG-001",
+    "fields": {
+      "employeeId": "EMP-001",
+      "productId": "SH-001",
+      "quantity": 80,
+      "brandName": "테스트브랜드",
+      "registeredAt": "2026-09-30T10:00:00Z"
+    }
+  }
+]
