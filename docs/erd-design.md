@@ -51,7 +51,9 @@ Firestore는 이 연결을 외래 키 제약으로 자동 강제하지 않는다
 - `lib/models/erd_entities.dart`: 13개 컬렉션/한글 필드명 및 Firestore 변환.
 - `lib/services/erd_service.dart`: 선택한 컬렉션의 실시간 조회.
 - `lib/discover/home.dart`: StatefulWidget 기본 화면(AppBar와 빈 body).
-- `lib/firebase_options.dart`: 웹/iOS별 Firebase 초기화 설정.
+- `lib/firebase_options.dart`: 웹/iOS/Android별 Firebase 초기화 설정.
+- `android/app/google-services.json`: 등록된 Android Firebase 앱 설정.
+- `android/settings.gradle.kts`, `android/app/build.gradle.kts`: Google services 플러그인 설정.
 - `ios/Flutter/Debug.xcconfig`, `ios/Flutter/Release.xcconfig`: 최소 iOS 15.0 및 Firebase 링크 설정(Profile은 Release 설정 사용).
 - `tool/erd_seed.json`: 앱과 관리 도구가 함께 사용하는 13개 테스트 문서.
 - `lib/services/erd_seed_service.dart`: SEED_ERD=true일 때 없는 문서만 생성.
