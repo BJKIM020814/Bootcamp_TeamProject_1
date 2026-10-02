@@ -56,7 +56,10 @@ class _LoginPageState extends State<LoginPage> {
       );
       // 비동기 요청 중 화면이 닫히면 화면 이동이나 메시지 표시를 하지 않는다.
       if (!mounted) return;
-      _onLoginSuccess('${(result['account'] as Map)['name']}');
+      _onLoginSuccess(
+        '${(result['account'] as Map)['name']}',
+        '${(result['account'] as Map)['email']}',
+      );
     } on FitpickApiException catch (error) {
       if (mounted) _showMessage(error.message);
     } catch (_) {
@@ -73,8 +76,8 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   // 서버 인증에 성공한 다음에만 기존 앱의 로그인 UI 상태를 변경한다.
-  void _onLoginSuccess(String name) {
-    AuthController.to.login();
+  void _onLoginSuccess(String name, String email) {
+    AuthController.to.login(email: email);
     _showMessage('$name님, 환영합니다.');
     if (Navigator.of(context).canPop()) {
       Navigator.of(context).pop();

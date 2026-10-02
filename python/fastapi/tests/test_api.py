@@ -29,6 +29,10 @@ class MemoryAccounts:
             raise HTTPException(401, 'bad credentials')
         return row
 
+    def change_password(self, email, current, next_password):
+        self.authenticate(email, current)
+        self.rows[email]['password'] = passwords.hash(next_password)
+
     def find(self, email):
         row = self.rows.get(email)
         return SimpleNamespace(to_dict=lambda: row) if row else None
@@ -299,3 +303,21 @@ def test_openapi_contains_frontend_response_contract(api):
     response = schema['paths']['/api/reviews']['post']['responses']['201']
     assert response['content']['application/json']['schema']['$ref'].endswith('ReviewOut')
     assert 'NotificationPage' in schema['components']['schemas']
+
+
+def test_password_change_preserves_hashed_auth(api):
+    client, _, _, _ = api
+    headers = auth(client)
+    assert client.post('/api/login/password', headers=headers,
+                       json={'current': 'wrong', 'next': 'new-password'}).status_code == 401
+    assert client.post('/api/login/password', headers=headers,
+                       json={'current': 'password with spaces ', 'next': 'new-password'}).status_code == 204
+    assert client.post('/api/login', json={'email': 'one@example.com', 'password': 'new-password'}).status_code == 200
+    assert client.post('/api/login', json={'email': 'one@example.com', 'password': 'password with spaces '}).status_code == 401
+
+
+def test_upstream_routers_remain_registered(api):
+    schema = api[0].get('/openapi.json').json()
+    assert '/api/v1/discover/products' in schema['paths']
+    assert '/api/v1/mypage/summary' in schema['paths']
+    assert '/api/v1/test/status' in schema['paths']

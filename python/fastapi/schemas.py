@@ -158,3 +158,10 @@ class NotificationOut(BaseModel):
 class NotificationPage(Page[NotificationOut]):
     # 알림 목록은 공통 페이지 정보에 배지 표시용 unreadCount를 추가한다.
     unreadCount: int
+
+
+class PasswordChange(Input):
+    # 새 로그인과 동일하게 비밀번호 공백을 보존한다.
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=False)
+    current: str = Field(min_length=1, max_length=128)
+    next: str = Field(min_length=8, max_length=128)

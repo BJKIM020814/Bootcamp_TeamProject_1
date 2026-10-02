@@ -69,6 +69,22 @@ class Accounts:
         return account
 
 
+    def change_password(self, email, current, next_password):
+        # 읽은 문서 버전에 조건을 걸어 동시 변경으로 비밀번호를 덮어쓰지 않는다.
+        doc = self.find(email)
+        if not doc:
+            raise HTTPException(401, '회원정보를 찾을 수 없습니다.')
+        encoded = doc.to_dict().get('password', '')
+        try:
+            valid = isinstance(encoded, str) and passwords.verify(current, encoded)
+        except (ValueError, UnknownHashError):
+            valid = False
+        if not valid:
+            raise HTTPException(401, '현재 비밀번호가 일치하지 않습니다.')
+        doc.reference.update({'password': passwords.hash(next_password)},
+                             option=self.client.write_option(last_update_time=doc.update_time))
+
+
 @lru_cache
 def get_accounts():
     # Google ADC 또는 서비스 계정 환경변수로 Python SDK 인증을 준비한다. CLI 로그인과는 별개다.

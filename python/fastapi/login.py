@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
 from .accounts import get_accounts, profile
 from .dependencies import get_local, current_email, bearer
-from .schemas import LoginInput, SessionOut, AccountOut
+from .schemas import LoginInput, SessionOut, AccountOut, PasswordChange
 
 router = APIRouter(prefix='/login', tags=['6. 로그인'])
 
@@ -30,3 +30,9 @@ def me(email=Depends(current_email), accounts=Depends(get_accounts)):
 def logout(email=Depends(current_email), credentials: HTTPAuthorizationCredentials = Depends(bearer), local=Depends(get_local)):
     # 현재 요청에 사용된 세션만 폐기한다. 동일 회원의 다른 기기 세션은 유지한다.
     local.logout(credentials.credentials)
+
+
+@router.post('/password', status_code=204)
+def change_password(data: PasswordChange, email=Depends(current_email), accounts=Depends(get_accounts)):
+    # 기존 main의 비밀번호 변경 화면도 해시 기반 계정과 호환되도록 서버에서 처리한다.
+    accounts.change_password(email, data.current, data.next)

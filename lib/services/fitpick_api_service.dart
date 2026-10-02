@@ -66,6 +66,18 @@ class FitpickApiService {
     return result;
   }
 
+  /// 비밀번호는 서버에서 현재 값을 검증한 뒤 새 해시로 저장한다.
+  Future<void> changePassword({
+    required String current,
+    required String next,
+  }) async {
+    await _request(
+      'POST',
+      '/login/password',
+      body: {'current': current, 'next': next},
+    );
+  }
+
   /// 현재 세션의 회원정보를 가져온다. 비밀번호는 서버 응답에 포함되지 않는다.
   Future<Map<String, dynamic>> me() => _request('GET', '/login/me');
 

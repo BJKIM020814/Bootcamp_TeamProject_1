@@ -138,6 +138,7 @@ Flutter 로그인/회원가입 화면은 REST 어댑터로 연결했다. 가입 
 | GET | /support/contacts | 내 문의 목록 |
 | GET | /support/contacts/{id} | 내 문의 및 답변 상세 |
 | POST | /support/contacts | 문의 접수 (201) |
+| POST | /login/password | 현재 비밀번호 검증 후 새 비밀번호 해시 저장 (204) |
 | POST | /signup/sync | 로그인 회원의 MySQL 고객 연결 재시도 |
 
 리뷰 등록:
@@ -237,3 +238,5 @@ python -m python.fastapi.check_schema
 외부 Firebase/MySQL에 테스트 계정을 만들지 않는다. 실제 연결 검증은 별도로 필요하다.
 구현 참고: [FastAPI 인증 문서](https://fastapi.tiangolo.com/tutorial/security/oauth2-jwt/),
 [Firestore Python 조회](https://docs.cloud.google.com/firestore/docs/samples/firestore-data-query-async).
+
+최신 main의 `/api/v1/discover`, `/api/v1/mypage` 라우터와 `/test` 안내 페이지도 공통 서버에 함께 등록한다. 비밀번호 변경 요청은 `{"current":"현재 비밀번호","next":"새 비밀번호"}` 형식이며 기존 Flutter 변경 화면도 이 API에 연결했다.
