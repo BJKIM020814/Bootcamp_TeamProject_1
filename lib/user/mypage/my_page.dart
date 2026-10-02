@@ -37,7 +37,11 @@ class _MyPageState extends State<MyPage> {
     _MenuItem(Icons.receipt_long_outlined, '주문 · 수령 내역'),
     _MenuItem(Icons.favorite_border, '찜한 상품'),
     _MenuItem(Icons.person_outline, '내 정보'),
-    _MenuItem(Icons.location_on_outlined, '자주 찾는 매장', trailing: '강남 스토어'),
+    _MenuItem(
+      Icons.location_on_outlined,
+      '자주 찾는 매장',
+      trailing: sampleFavoriteStoreName,
+    ),
     _MenuItem(Icons.snowshoeing_outlined, '리뷰 관리'),
     _MenuItem(Icons.history, '최근 본 상품'),
     _MenuItem(Icons.confirmation_number_outlined, '쿠폰함'),
@@ -105,9 +109,9 @@ class _MyPageState extends State<MyPage> {
             children: [
               Row(
                 children: [
-                  const Text(
-                    '홍길동님',
-                    style: TextStyle(
+                  Text(
+                    '${sampleProfile.name}님',
+                    style: const TextStyle(
                       fontSize: 26,
                       fontWeight: FontWeight.bold,
                       color: _ink,
@@ -115,15 +119,17 @@ class _MyPageState extends State<MyPage> {
                   ),
                   const SizedBox(width: 8),
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFFE0EEE9),
                       borderRadius: BorderRadius.circular(14),
                     ),
-                    child: const Text(
-                      '브론즈',
-                      style: TextStyle(
+                    child: Text(
+                      sampleProfile.grade,
+                      style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
                         color: _green,
@@ -143,8 +149,10 @@ class _MyPageState extends State<MyPage> {
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text('내 정보 수정',
-                        style: TextStyle(fontSize: 12, color: _sub)),
+                    Text(
+                      '내 정보 수정',
+                      style: TextStyle(fontSize: 12, color: _sub),
+                    ),
                     SizedBox(width: 6),
                     Icon(Icons.north_east, size: 13, color: _sub),
                   ],
@@ -167,11 +175,11 @@ class _MyPageState extends State<MyPage> {
       child: IntrinsicHeight(
         child: Row(
           children: [
-            _statItem('5', '주문 내역'),
+            _statItem('$sampleOrderCount', '주문 내역'),
             const VerticalDivider(width: 1, color: Color(0xFFE3E7EA)),
-            _statItem('1', '찜한 상품'),
+            _statItem('${sampleWishlist().length}', '찜한 상품'),
             const VerticalDivider(width: 1, color: Color(0xFFE3E7EA)),
-            _statItem('0', '작성한 리뷰'),
+            _statItem('$sampleReviewCount', '작성한 리뷰'),
           ],
         ),
       ),
@@ -245,20 +253,20 @@ class _MyPageState extends State<MyPage> {
                   style: TextStyle(fontSize: 20, color: Colors.white),
                 ),
                 const SizedBox(height: 12),
-                const Row(
+                Row(
                   crossAxisAlignment: CrossAxisAlignment.baseline,
                   textBaseline: TextBaseline.alphabetic,
                   children: [
                     Text(
-                      '270',
-                      style: TextStyle(
+                      sampleProfile.shoeSize.replaceAll('mm', ''),
+                      style: const TextStyle(
                         fontSize: 52,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
                       ),
                     ),
                     SizedBox(width: 4),
-                    Text(
+                    const Text(
                       'mm',
                       style: TextStyle(fontSize: 18, color: Color(0xFF9FB0B8)),
                     ),
@@ -266,16 +274,24 @@ class _MyPageState extends State<MyPage> {
                 ),
                 const SizedBox(height: 14),
                 InkWell(
-                  onTap: () => Get.to(() => ProfilePage(profile: sampleProfile)),
+                  onTap: () =>
+                      Get.to(() => ProfilePage(profile: sampleProfile)),
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text('사이즈 변경',
-                          style: TextStyle(
-                              fontSize: 12, color: Color(0xFFD0D8DC))),
+                      Text(
+                        '사이즈 변경',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFFD0D8DC),
+                        ),
+                      ),
                       SizedBox(width: 8),
-                      Icon(Icons.north_east,
-                          size: 14, color: Color(0xFFD0D8DC)),
+                      Icon(
+                        Icons.north_east,
+                        size: 14,
+                        color: Color(0xFFD0D8DC),
+                      ),
                     ],
                   ),
                 ),
@@ -287,6 +303,7 @@ class _MyPageState extends State<MyPage> {
     );
   }
 
+  /// 선택한 메뉴에 맞는 화면으로 이동합니다. 데이터는 시연용 sample API를 전달합니다.
   void _openMenu(_MenuItem item) {
     switch (item.title) {
       case '주문 · 수령 내역':
@@ -356,10 +373,19 @@ class _MyPageState extends State<MyPage> {
             children: [
               _tabItem(0, Icons.home_outlined, Icons.home, '홈'),
               _tabItem(1, Icons.grid_view_outlined, Icons.grid_view, '카테고리'),
-              _tabItem(2, Icons.shopping_bag_outlined, Icons.shopping_bag, '장바구니',
-                  badge: 1),
               _tabItem(
-                  3, Icons.receipt_long_outlined, Icons.receipt_long, '주문내역'),
+                2,
+                Icons.shopping_bag_outlined,
+                Icons.shopping_bag,
+                '장바구니',
+                badge: 1,
+              ),
+              _tabItem(
+                3,
+                Icons.receipt_long_outlined,
+                Icons.receipt_long,
+                '주문내역',
+              ),
               _tabItem(4, Icons.person_outline, Icons.person, '마이'),
             ],
           ),
@@ -370,7 +396,9 @@ class _MyPageState extends State<MyPage> {
 
   // 로그인하지 않은 상태라면 로그인 화면으로, 로그인된 상태라면 요청한 화면으로 이동합니다.
   void _goToIfLoggedIn(Widget Function() builder) {
-    Get.to(AuthController.to.isLoggedIn.value ? builder : () => const LoginPage());
+    Get.to(
+      AuthController.to.isLoggedIn.value ? builder : () => const LoginPage(),
+    );
   }
 
   void _goToTab(int index) {
@@ -389,8 +417,13 @@ class _MyPageState extends State<MyPage> {
     }
   }
 
-  Widget _tabItem(int index, IconData icon, IconData activeIcon, String label,
-      {int badge = 0}) {
+  Widget _tabItem(
+    int index,
+    IconData icon,
+    IconData activeIcon,
+    String label, {
+    int badge = 0,
+  }) {
     final bool selected = _tabIndex == index;
     final Color color = selected ? _ink : const Color(0xFF8A96A0);
     return Expanded(
