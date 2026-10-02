@@ -1,4 +1,3 @@
-import 'package:bootcamp_teamproject_1/discover/product_detail_page.dart';
 import 'package:bootcamp_teamproject_1/discover/product_list_page.dart';
 import 'package:bootcamp_teamproject_1/discover/store_selection_page.dart';
 import 'package:bootcamp_teamproject_1/order/cartPage.dart';
@@ -439,10 +438,7 @@ class _HomePageState extends State<HomePage> {
             icon: Icon(Icons.grid_view_rounded),
             label: '카테고리',
           ),
-          NavigationDestination(
-            icon: CartBadgeIcon(),
-            label: '장바구니',
-          ),
+          NavigationDestination(icon: CartBadgeIcon(), label: '장바구니'),
           NavigationDestination(
             icon: Icon(Icons.receipt_long_outlined),
             label: '주문내역',
@@ -461,10 +457,8 @@ class _HomePageState extends State<HomePage> {
     context,
   ).push(MaterialPageRoute(builder: (_) => const ProductListPage()));
 
-  // 배너와 상품 카드를 누르면 상품 상세로 이동합니다.
-  void _openProductDetail() => Navigator.of(
-    context,
-  ).push(MaterialPageRoute(builder: (_) => const ProductDetailPage()));
+  // 배너는 현재 DB 등록 상품을 확인할 수 있는 목록으로 이동합니다.
+  void _openProductDetail() => _openProductList();
 
   // 오프라인 매장 확인 카드를 누르면 매장 선택으로 이동합니다.
   void _openStoreSelection() => Navigator.of(
