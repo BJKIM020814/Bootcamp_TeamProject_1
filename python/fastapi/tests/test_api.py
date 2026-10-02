@@ -318,6 +318,24 @@ def test_password_change_preserves_hashed_auth(api):
 
 def test_upstream_routers_remain_registered(api):
     schema = api[0].get('/openapi.json').json()
-    assert '/api/v1/discover/products' in schema['paths']
-    assert '/api/v1/mypage/summary' in schema['paths']
-    assert '/api/v1/test/status' in schema['paths']
+    expected_paths = {
+        '/api/login', '/api/signup', '/api/reviews', '/api/notifications',
+        '/api/settings', '/api/support/faqs', '/api/v1/discover/products',
+        '/api/v1/mypage/summary', '/api/v1/test/status', '/api/v1/test/firebase',
+    }
+    assert expected_paths.issubset(schema['paths'])
+
+
+def test_firebase_credentials_preflight_does_not_expose_key_path(monkeypatch):
+    """A missing service key must stop signup/login safely before any Firebase write."""
+    from python.fastapi.accounts import get_accounts
+
+    monkeypatch.delenv('GOOGLE_APPLICATION_CREDENTIALS', raising=False)
+    get_accounts.cache_clear()
+    with TestClient(app) as client:
+        response = client.get('/api/v1/test/firebase')
+
+    assert response.status_code == 503
+    assert response.json()['code'] == 'FIREBASE_CREDENTIALS_UNAVAILABLE'
+    assert '/Users/' not in response.text
+    get_accounts.cache_clear()

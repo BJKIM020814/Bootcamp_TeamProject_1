@@ -10,6 +10,7 @@ from google.api_core.exceptions import GoogleAPICallError
 from google.auth.exceptions import DefaultCredentialsError, RefreshError
 from python.db import DBError
 from . import customer_support, login, notifications, review_management, review_write, signup
+from .accounts import FirebaseCredentialsConfigurationError, get_accounts
 from .dependencies import get_local
 from . import app_settings
 from .discover.router import router as discover_router
@@ -38,12 +39,49 @@ app.include_router(discover_router)
 app.include_router(user_router)
 
 
+# 한 서버의 OpenAPI 문서에 반드시 노출되어야 하는 대표 경로다.
+# 이 목록은 실제 요청을 만들지 않고 라우터 결합 상태만 확인하므로 테스트 중 데이터를 변경하지 않는다.
+_SWAGGER_REQUIRED_PATHS = (
+    '/api/login',
+    '/api/signup',
+    '/api/reviews',
+    '/api/notifications',
+    '/api/settings',
+    '/api/support/faqs',
+    '/api/v1/discover/products',
+    '/api/v1/mypage/summary',
+    '/api/v1/test/status',
+    '/api/v1/test/firebase',
+)
+
+
+def swagger_route_status():
+    """Return the route-registration result used by `/test` and smoke tests."""
+    registered_paths = {route.path for route in app.routes if hasattr(route, 'path')}
+    missing_paths = [path for path in _SWAGGER_REQUIRED_PATHS if path not in registered_paths]
+    return {
+        'ok': not missing_paths,
+        'required_paths': list(_SWAGGER_REQUIRED_PATHS),
+        'missing_paths': missing_paths,
+    }
+
+
 async def unavailable(request: Request, exc: Exception):
     # DB 오류/접속정보를 응답에 노출하지 않는다.
     # 저장소 연결/인증/스키마 오류를 503으로 통일하고 상세 접속정보는 클라이언트에 보내지 않는다.
     return JSONResponse(status_code=503, content={'detail': '데이터 저장소 연결 또는 스키마 설정을 확인해 주세요.', 'code': 'DISCOVER_DB_UNAVAILABLE', 'message': '데이터 저장소 연결 또는 스키마 설정을 확인해 주세요.'})
 
 
+async def firebase_credentials_unavailable(request: Request, exc: Exception):
+    # 실제 경로나 키 내용은 응답에 담지 않는다. 팀원이 고칠 수 있는 설정 종류만 알려 준다.
+    return JSONResponse(status_code=503, content={
+        'detail': 'Firebase 서비스 계정 설정을 확인해 주세요.',
+        'code': 'FIREBASE_CREDENTIALS_UNAVAILABLE',
+        'message': 'Firebase 서비스 계정 설정을 확인해 주세요.',
+    })
+
+
+app.add_exception_handler(FirebaseCredentialsConfigurationError, firebase_credentials_unavailable)
 for error in (DBError, sqlite3.Error, GoogleAPICallError, DefaultCredentialsError, RefreshError):
     app.add_exception_handler(error, unavailable)
 
@@ -58,13 +96,37 @@ def health():
 def test_status():
     """No-write integration check for the browser test page and smoke tests."""
     from python import db
-    return {"database": db.query_one("SELECT DATABASE() AS name")["name"], "discover_product_count": db.query_one("SELECT COUNT(*) AS count FROM product")["count"], "mypage_tables": [row["name"] for row in db.query("SELECT table_name AS name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name IN ('customer_setting', 'wishlist', 'recently_viewed') ORDER BY table_name")]}
+    return {
+        'swagger': swagger_route_status(),
+        'database': db.query_one("SELECT DATABASE() AS name")['name'],
+        'discover_product_count': db.query_one("SELECT COUNT(*) AS count FROM product")['count'],
+        'mypage_tables': [row['name'] for row in db.query(
+            "SELECT table_name AS name FROM information_schema.tables "
+            "WHERE table_schema = DATABASE() "
+            "AND table_name IN ('customer_setting', 'wishlist', 'recently_viewed') "
+            "ORDER BY table_name"
+        )],
+    }
+
+
+@app.get('/api/v1/test/firebase', tags=['System'], summary='Firebase 서비스 계정 읽기 연결 확인')
+def firebase_connection_status():
+    """Read one account document at most; this endpoint never creates or changes Firebase data."""
+    accounts = get_accounts()
+    # stream()을 한 건만 소비해 서비스 계정의 Firestore 읽기 권한과 대상 프로젝트를 실제 검증한다.
+    next(accounts.client.collection('account').limit(1).stream(), None)
+    return {
+        'ok': True,
+        'project_id': os.getenv('FIREBASE_PROJECT_ID', 'shoe-20260930'),
+        'database_id': os.getenv('FIREBASE_DATABASE_ID', '(default)'),
+        'account_collection_readable': True,
+    }
 
 
 @app.get("/test", response_class=HTMLResponse, include_in_schema=False)
 def test_page():
     """Small browser page that checks all domain wiring without changing data."""
-    return """<!doctype html><title>FITPICK API Test</title><body><h1>FITPICK API Test</h1><p id='result'>Checking…</p><p><a href='/docs'>Swagger docs</a></p><script>fetch('/api/v1/test/status').then(r=>r.json()).then(v=>document.querySelector('#result').textContent='PASS: '+JSON.stringify(v)).catch(e=>document.querySelector('#result').textContent='FAIL: '+e);</script></body>"""
+    return """<!doctype html><title>FITPICK API Test</title><body><h1>FITPICK API Test</h1><p id='result'>Checking…</p><p><a href='/docs'>Swagger docs</a></p><script>fetch('/api/v1/test/status').then(async r=>{const v=await r.json();if(!r.ok||!v.swagger.ok)throw new Error(JSON.stringify(v));return v;}).then(v=>document.querySelector('#result').textContent='PASS: '+JSON.stringify(v)).catch(e=>document.querySelector('#result').textContent='FAIL: '+e.message);</script></body>"""
 
 
 

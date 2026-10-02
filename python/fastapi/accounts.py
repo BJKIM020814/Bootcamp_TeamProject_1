@@ -1,8 +1,10 @@
 # 회원 원본 데이터는 Firestore account에 두고, 비밀번호 검증은 서버에서만 수행한다.
 """기존 account 문서 ID를 유지. 신규 이메일은 결정적 ID로 중복 가입 방지."""
 import hashlib
+import json
 import os
 from functools import lru_cache
+from pathlib import Path
 from google.cloud import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
 from google.api_core.exceptions import AlreadyExists
@@ -11,6 +13,39 @@ from pwdlib.exceptions import UnknownHashError
 from fastapi import HTTPException
 
 passwords = PasswordHash.recommended()
+
+
+class FirebaseCredentialsConfigurationError(Exception):
+    """Raised when the server cannot safely locate its Firebase service key."""
+
+
+def _validate_service_account_environment():
+    """Validate ADC service-account configuration without exposing its path or key."""
+    configured_path = os.getenv('GOOGLE_APPLICATION_CREDENTIALS', '').strip()
+    if not configured_path:
+        raise FirebaseCredentialsConfigurationError(
+            'GOOGLE_APPLICATION_CREDENTIALS 환경변수가 설정되지 않았습니다.'
+        )
+
+    credential_path = Path(configured_path).expanduser()
+    if not credential_path.is_file():
+        raise FirebaseCredentialsConfigurationError(
+            'GOOGLE_APPLICATION_CREDENTIALS가 가리키는 서비스 계정 파일을 찾을 수 없습니다.'
+        )
+
+    try:
+        with credential_path.open(encoding='utf-8') as credential_file:
+            credential_project_id = json.load(credential_file).get('project_id')
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise FirebaseCredentialsConfigurationError(
+            '서비스 계정 JSON 파일 형식을 확인해 주세요.'
+        ) from exc
+
+    expected_project_id = os.getenv('FIREBASE_PROJECT_ID', 'shoe-20260930')
+    if credential_project_id != expected_project_id:
+        raise FirebaseCredentialsConfigurationError(
+            '서비스 계정의 Firebase 프로젝트가 현재 서버 설정과 일치하지 않습니다.'
+        )
 
 
 def profile(account):
@@ -87,7 +122,8 @@ class Accounts:
 
 @lru_cache
 def get_accounts():
-    # Google ADC 또는 서비스 계정 환경변수로 Python SDK 인증을 준비한다. CLI 로그인과는 별개다.
+    # Python SDK는 CLI 로그인과 별개다. 실제 서비스 계정 파일과 프로젝트 일치 여부를 먼저 검사한다.
+    _validate_service_account_environment()
     return Accounts(firestore.Client(
         project=os.getenv('FIREBASE_PROJECT_ID', 'shoe-20260930'),
         database=os.getenv('FIREBASE_DATABASE_ID', '(default)')))
