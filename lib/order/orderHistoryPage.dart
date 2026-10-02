@@ -1,39 +1,14 @@
-import 'package:bootcamp_teamproject_1/order/cartpage.dart';
-import 'package:bootcamp_teamproject_1/order/exchangeRequestPage.dart';
-import 'package:bootcamp_teamproject_1/order/orderDetailPage.dart';
+import 'package:bootcamp_teamproject_1/order/cartPage.dart';
 import 'package:bootcamp_teamproject_1/order/exchangeHistoryPage.dart';
+import 'package:bootcamp_teamproject_1/order/exchangeRequestPage.dart';
+import 'package:bootcamp_teamproject_1/order/orderApi.dart';
+import 'package:bootcamp_teamproject_1/order/orderDetailPage.dart';
 import 'package:bootcamp_teamproject_1/order/returnRequestPage.dart';
+import 'package:bootcamp_teamproject_1/user/mypage/reviewwritepage.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-enum _OrderStatus { inProgress, completed, cancelled }
-
-class _OrderRecord {
-  const _OrderRecord({
-    required this.date,
-    required this.orderNumber,
-    required this.status,
-    required this.brand,
-    required this.name,
-    required this.colorLabel,
-    required this.price,
-    required this.quantity,
-    required this.storeName,
-    required this.stageIndex,
-  });
-
-  final String date;
-  final String orderNumber;
-  final _OrderStatus status;
-  final String brand;
-  final String name;
-  final String colorLabel;
-  final int price;
-  final int quantity;
-  final String storeName;
-  final int stageIndex; // 0=결제, 1=준비, 2=이동, 3=수령
-}
-
+/// 주문내역. 서버(/api/v1/order/orders?status=...)에서 탭별로 불러온다.
 class Orderhistorypage extends StatefulWidget {
   const Orderhistorypage({super.key});
 
@@ -44,145 +19,78 @@ class Orderhistorypage extends StatefulWidget {
 class _OrderhistorypageState extends State<Orderhistorypage> {
   int _filterIndex = 0;
   static const _filters = ['전체', '진행 중', '수령 완료', '취소'];
+  static const _filterValues = ['all', 'in_progress', 'completed', 'cancelled'];
 
-  // TODO: 실제 주문 데이터 연동 시 서버/DB 조회 결과로 교체한다.
-  static const _orders = <_OrderRecord>[
-    _OrderRecord(
-      date: '2026.10.01',
-      orderNumber: 'DEMO-AC66E209',
-      status: _OrderStatus.inProgress,
-      brand: 'NEW BALANCE',
-      name: '530',
-      colorLabel: '화이트 / 네추럴 인디고 · 270mm',
-      price: 129000,
-      quantity: 1,
-      storeName: '강남 스토어',
-      stageIndex: 1,
-    ),
-    _OrderRecord(
-      date: '2026.10.01',
-      orderNumber: 'DEMO-2382EE5B',
-      status: _OrderStatus.inProgress,
-      brand: 'NEW BALANCE',
-      name: '530',
-      colorLabel: '화이트 / 네추럴 인디고 · 270mm',
-      price: 129000,
-      quantity: 1,
-      storeName: '성수 스토어',
-      stageIndex: 2,
-    ),
-    _OrderRecord(
-      date: '2026.09.08',
-      orderNumber: 'FP260908-005',
-      status: _OrderStatus.completed,
-      brand: 'PUMA',
-      name: '스웨이드 클래식',
-      colorLabel: '푸마 컬렉 / 푸마 화이트 · 260mm',
-      price: 99000,
-      quantity: 1,
-      storeName: '강남 스토어',
-      stageIndex: 3,
-    ),
-    _OrderRecord(
-      date: '2026.08.20',
-      orderNumber: 'DEMO-7781CA02',
-      status: _OrderStatus.cancelled,
-      brand: 'ADIDAS',
-      name: '삼바 OG',
-      colorLabel: '블랙 / 화이트 · 265mm',
-      price: 139000,
-      quantity: 1,
-      storeName: '강남 스토어',
-      stageIndex: 0,
-    ),
-  ];
+  List<OrderSummary>? _orders;
+  String? _error;
 
-  String _formatWon(int value) {
-    final digits = value.toString();
-    final buffer = StringBuffer();
-    for (var i = 0; i < digits.length; i++) {
-      final remaining = digits.length - i;
-      if (i > 0 && remaining % 3 == 0) buffer.write(',');
-      buffer.write(digits[i]);
-    }
-    return '₩$buffer';
+  @override
+  void initState() {
+    super.initState();
+    _load();
   }
 
-  List<_OrderRecord> get _filteredOrders {
-    switch (_filterIndex) {
-      case 1:
-        return _orders.where((o) => o.status == _OrderStatus.inProgress).toList();
-      case 2:
-        return _orders.where((o) => o.status == _OrderStatus.completed).toList();
-      case 3:
-        return _orders.where((o) => o.status == _OrderStatus.cancelled).toList();
-      default:
-        return _orders;
+  Future<void> _load() async {
+    setState(() {
+      _error = null;
+      _orders = null;
+    });
+    try {
+      final orders = await OrderApi.orders(status: _filterValues[_filterIndex]);
+      if (mounted) setState(() => _orders = orders);
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
     }
   }
 
-  void _openOrderDetail() => Get.to(() => const Orderdetailpage());
-
-  void _openOrderDetailFor(_OrderRecord order) {
-    Get.to(
-      () => Orderdetailpage(
-        orderNumber: order.orderNumber,
-        brand: order.brand,
-        productName: order.name,
-        colorLabel: order.colorLabel,
-        price: order.price,
-        quantity: order.quantity,
-        storeName: order.storeName,
-        initialStage: order.status == _OrderStatus.completed
-            ? PickupStage.completed
-            : PickupStage.preparing,
-      ),
-    );
+  void _selectFilter(int index) {
+    if (_filterIndex == index) return;
+    _filterIndex = index;
+    _load();
   }
 
-  void _openExchangeCases() => Get.to(() => const Exchangehistorypage());
+  Future<void> _openOrderDetailFor(OrderSummary order) async {
+    await Get.to(() => Orderdetailpage(orderNumber: order.orderNumber));
+    _load();
+  }
 
-  void _openExchangeRequest(_OrderRecord order) {
-    Get.to(
+  /// 상품이 하나면 바로 신청 화면으로, 여러 개면 상세에서 상품을 고르게 한다.
+  Future<void> _openExchangeRequest(OrderSummary order) async {
+    if (order.items.length != 1) return _openOrderDetailFor(order);
+    await Get.to(
       () => Exchangerequestpage(
-        brand: order.brand,
-        productName: order.name,
-        colorLabel: order.colorLabel,
-        price: order.price,
-        quantity: order.quantity,
+        orderNumber: order.orderNumber,
+        orderItemId: order.items.first.orderItemId,
       ),
     );
+    _load();
   }
 
-  void _openReturnRequest(_OrderRecord order) {
-    Get.to(
+  Future<void> _openReturnRequest(OrderSummary order) async {
+    if (order.items.length != 1) return _openOrderDetailFor(order);
+    await Get.to(
       () => Returnrequestpage(
-        brand: order.brand,
-        productName: order.name,
-        colorLabel: order.colorLabel,
-        price: order.price,
-        quantity: order.quantity,
+        orderNumber: order.orderNumber,
+        orderItemId: order.items.first.orderItemId,
       ),
     );
+    _load();
   }
 
   void _openExchangeReturnHistory() => Get.to(() => const Exchangehistorypage());
 
-  void _writeReview() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('리뷰 작성 기능은 준비 중입니다.')),
-    );
-  }
+  void _writeReview() => Get.to(() => const ReviewWritePage());
 
   @override
   Widget build(BuildContext context) {
+    final orders = _orders;
     return Scaffold(
       appBar: AppBar(
         title: Text('주문내역'),
         centerTitle: true,
         actions: [
           IconButton(
-            onPressed: () => Get.to(Cartpage()),
+            onPressed: () => Get.to(() => const Cartpage()),
             icon: Icon(Icons.shopping_bag_outlined),
           ),
         ],
@@ -195,52 +103,69 @@ class _OrderhistorypageState extends State<Orderhistorypage> {
               child: _buildFilterTabs(),
             ),
             Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-                children: [
-                  Text(
-                    '본사 발송부터 매장 픽업까지 안전하게 확인하세요.',
-                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildDemoButtonsRow(),
-                  const SizedBox(height: 20),
-                  if (_filteredOrders.isEmpty) _buildEmptyFilterState(),
-                  for (final order in _filteredOrders) ...[
-                    _buildOrderCard(order),
-                    const SizedBox(height: 16),
-                  ],
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton(
-                      onPressed: _openExchangeReturnHistory,
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        side: BorderSide(color: Colors.grey.shade300),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
+              child: RefreshIndicator(
+                onRefresh: _load,
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                  children: [
+                    Text(
+                      '본사 발송부터 매장 픽업까지 안전하게 확인하세요.',
+                      style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                    ),
+                    const SizedBox(height: 20),
+                    if (_error != null)
+                      _buildErrorState(_error!)
+                    else if (orders == null)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 40),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    else if (orders.isEmpty)
+                      _buildEmptyFilterState()
+                    else
+                      for (final order in orders) ...[
+                        _buildOrderCard(order),
+                        const SizedBox(height: 16),
+                      ],
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton(
+                        onPressed: _openExchangeReturnHistory,
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          side: BorderSide(color: Colors.grey.shade300),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                         ),
-                      ),
-                      child: const Text(
-                        '교환·반품 신청 내역',
-                        style: TextStyle(
-                          color: Colors.black,
-                          fontWeight: FontWeight.w600,
+                        child: const Text(
+                          '교환·반품 신청 내역',
+                          style: TextStyle(
+                            color: Colors.black,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    '실시간 서버 연결 전 시연 데이터입니다. 새로고침하면 초기화됩니다.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildErrorState(String message) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 40),
+      child: Column(
+        children: [
+          Text(message, textAlign: TextAlign.center),
+          const SizedBox(height: 12),
+          OutlinedButton(onPressed: _load, child: const Text('다시 시도')),
+        ],
       ),
     );
   }
@@ -251,7 +176,7 @@ class _OrderhistorypageState extends State<Orderhistorypage> {
         for (var i = 0; i < _filters.length; i++) ...[
           Expanded(
             child: GestureDetector(
-              onTap: () => setState(() => _filterIndex = i),
+              onTap: () => _selectFilter(i),
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 alignment: Alignment.center,
@@ -276,37 +201,6 @@ class _OrderhistorypageState extends State<Orderhistorypage> {
     );
   }
 
-  Widget _buildDemoButtonsRow() {
-    final buttons = [
-      ('발송 시작·변경 잠금 확인', _openOrderDetail),
-      ('QR 수령 인증 시연', _openOrderDetail),
-      ('교환·반품 사례 보기', _openExchangeCases),
-    ];
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: [
-          for (final (label, onTap) in buttons) ...[
-            OutlinedButton(
-              onPressed: onTap,
-              style: OutlinedButton.styleFrom(
-                side: BorderSide(color: Colors.grey.shade300),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-              ),
-              child: Text(
-                label,
-                style: const TextStyle(fontSize: 12, color: Colors.black),
-              ),
-            ),
-            const SizedBox(width: 8),
-          ],
-        ],
-      ),
-    );
-  }
-
   Widget _buildEmptyFilterState() {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 40),
@@ -319,7 +213,9 @@ class _OrderhistorypageState extends State<Orderhistorypage> {
     );
   }
 
-  Widget _buildOrderCard(_OrderRecord order) {
+  Widget _buildOrderCard(OrderSummary order) {
+    final first = order.items.isEmpty ? null : order.items.first;
+    final extra = order.items.length - 1;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -337,7 +233,7 @@ class _OrderhistorypageState extends State<Orderhistorypage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      order.date,
+                      formatDate(order.orderedAt),
                       style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
                     ),
                     Text(
@@ -350,73 +246,83 @@ class _OrderhistorypageState extends State<Orderhistorypage> {
                   ],
                 ),
               ),
-              _buildStatusChip(order.status),
+              _buildStatusChip(order),
             ],
           ),
-          const SizedBox(height: 12),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade200,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.image_outlined, color: Colors.grey),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      order.brand,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.grey.shade600,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    Text(
-                      order.name,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      order.colorLabel,
-                      style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        Text(
-                          _formatWon(order.price),
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                          ),
+          if (first != null) ...[
+            const SizedBox(height: 12),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  clipBehavior: Clip.antiAlias,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade200,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: first.imageUrl == null
+                      ? const Icon(Icons.image_outlined, color: Colors.grey)
+                      : Image.network(
+                          first.imageUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) =>
+                              const Icon(Icons.image_outlined, color: Colors.grey),
                         ),
-                        const SizedBox(width: 8),
-                        Text(
-                          '수량 ${order.quantity}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
                 ),
-              ),
-            ],
-          ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        first.brand,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey.shade600,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      Text(
+                        extra > 0 ? '${first.name} 외 $extra건' : first.name,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        first.optionLabel,
+                        style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Text(
+                            formatWon(order.paidAmount),
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '수량 ${order.items.fold<int>(0, (sum, item) => sum + item.quantity)}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 14),
           Row(
             children: [
@@ -433,7 +339,7 @@ class _OrderhistorypageState extends State<Orderhistorypage> {
               ),
             ],
           ),
-          if (order.status != _OrderStatus.cancelled) ...[
+          if (order.statusGroup != 'cancelled') ...[
             const SizedBox(height: 14),
             _buildProgressStepper(order.stageIndex),
           ],
@@ -444,29 +350,15 @@ class _OrderhistorypageState extends State<Orderhistorypage> {
     );
   }
 
-  Widget _buildStatusChip(_OrderStatus status) {
-    late String label;
-    late Color bg;
-    late Color fg;
-    switch (status) {
-      case _OrderStatus.completed:
-        label = '수령 완료';
-        bg = const Color(0xFFE3F3EA);
-        fg = const Color(0xFF1F5A46);
-      case _OrderStatus.inProgress:
-        label = '결제 완료';
-        bg = const Color(0xFFE3F3EA);
-        fg = const Color(0xFF1F5A46);
-      case _OrderStatus.cancelled:
-        label = '주문 취소';
-        bg = Colors.grey.shade200;
-        fg = Colors.grey.shade600;
-    }
+  Widget _buildStatusChip(OrderSummary order) {
+    final cancelled = order.statusGroup == 'cancelled';
+    final bg = cancelled ? Colors.grey.shade200 : const Color(0xFFE3F3EA);
+    final fg = cancelled ? Colors.grey.shade600 : const Color(0xFF1F5A46);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)),
       child: Text(
-        label,
+        order.statusLabel,
         style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: fg),
       ),
     );
@@ -525,117 +417,69 @@ class _OrderhistorypageState extends State<Orderhistorypage> {
     );
   }
 
-  Widget _buildOrderActions(_OrderRecord order) {
-    if (order.status == _OrderStatus.completed) {
+  Widget _outlined(String label, VoidCallback onPressed) {
+    return OutlinedButton(
+      onPressed: onPressed,
+      style: OutlinedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        side: BorderSide(color: Colors.grey.shade300),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      child: Text(label, style: const TextStyle(color: Colors.black)),
+    );
+  }
+
+  Widget _filled(String label, VoidCallback onPressed) {
+    return ElevatedButton(
+      onPressed: onPressed,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      child: Text(label),
+    );
+  }
+
+  Widget _buildOrderActions(OrderSummary order) {
+    if (order.statusGroup == 'completed') {
       return Column(
         children: [
           Row(
             children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => _openOrderDetailFor(order),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    side: BorderSide(color: Colors.grey.shade300),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: const Text('상세 보기', style: TextStyle(color: Colors.black)),
-                ),
-              ),
+              Expanded(child: _outlined('상세 보기', () => _openOrderDetailFor(order))),
               const SizedBox(width: 10),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: _writeReview,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.black,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: const Text('리뷰 작성'),
-                ),
-              ),
+              Expanded(child: _filled('리뷰 작성', _writeReview)),
             ],
           ),
           const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => _openExchangeRequest(order),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    side: BorderSide(color: Colors.grey.shade300),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: const Text('교환 신청', style: TextStyle(color: Colors.black)),
-                ),
-              ),
+              Expanded(child: _outlined('교환 신청', () => _openExchangeRequest(order))),
               const SizedBox(width: 10),
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => _openReturnRequest(order),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    side: BorderSide(color: Colors.grey.shade300),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: const Text('반품 신청', style: TextStyle(color: Colors.black)),
-                ),
-              ),
+              Expanded(child: _outlined('반품 신청', () => _openReturnRequest(order))),
             ],
           ),
         ],
       );
     }
 
-    if (order.status == _OrderStatus.cancelled) {
+    if (order.statusGroup == 'cancelled') {
       return SizedBox(
         width: double.infinity,
-        child: OutlinedButton(
-          onPressed: () => _openOrderDetailFor(order),
-          style: OutlinedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            side: BorderSide(color: Colors.grey.shade300),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          ),
-          child: const Text('상세 보기', style: TextStyle(color: Colors.black)),
-        ),
+        child: _outlined('상세 보기', () => _openOrderDetailFor(order)),
       );
     }
 
     return Row(
       children: [
-        Expanded(
-          child: OutlinedButton(
-            onPressed: () => _openOrderDetailFor(order),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              side: BorderSide(color: Colors.grey.shade300),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            child: const Text('상세 보기', style: TextStyle(color: Colors.black)),
-          ),
-        ),
+        Expanded(child: _outlined('상세 보기', () => _openOrderDetailFor(order))),
         const SizedBox(width: 10),
         Expanded(
-          child: ElevatedButton(
-            onPressed: () => _openOrderDetailFor(order),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.black,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            child: const Text('준비 상태 보기'),
+          child: _filled(
+            order.status == 'READY' ? '수령증 보기' : '준비 상태 보기',
+            () => _openOrderDetailFor(order),
           ),
         ),
       ],

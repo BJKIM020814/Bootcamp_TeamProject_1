@@ -1,128 +1,114 @@
-import 'package:bootcamp_teamproject_1/order/cartpage.dart';
+import 'package:bootcamp_teamproject_1/order/cartPage.dart';
 import 'package:bootcamp_teamproject_1/order/exchangeRequestPage.dart';
+import 'package:bootcamp_teamproject_1/order/orderApi.dart';
 import 'package:bootcamp_teamproject_1/order/orderHistoryPage.dart';
 import 'package:bootcamp_teamproject_1/order/pickupQrPage.dart';
 import 'package:bootcamp_teamproject_1/order/returnRequestPage.dart';
+import 'package:bootcamp_teamproject_1/user/mypage/reviewwritepage.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-enum PickupStage { preparing, completed }
-
+/// 주문·준비 상태 상세. 주문번호로 서버(/api/v1/order/orders/{주문번호})에서 불러온다.
 class Orderdetailpage extends StatefulWidget {
-  const Orderdetailpage({
-    super.key,
-    this.orderNumber = 'FP260908-005',
-    this.brand = 'PUMA',
-    this.productName = '스웨이드 클래식',
-    this.colorLabel = '푸마 콜렉 / 푸마 화이트 · 260mm',
-    this.sizeLabel = '260mm',
-    this.price = 99000,
-    this.quantity = 1,
-    this.paymentMethod = '신용 / 체크카드',
-    this.storeName = '강남 스토어',
-    this.storeAddress = '서울 강남구 강남역 인근 · 예시 위치',
-    this.storeHours = '운영 예시 10:00 - 20:00',
-    this.initialStage = PickupStage.completed,
-  });
+  const Orderdetailpage({super.key, required this.orderNumber});
 
   final String orderNumber;
-  final String brand;
-  final String productName;
-  final String colorLabel;
-  final String sizeLabel;
-  final int price;
-  final int quantity;
-  final String paymentMethod;
-  final String storeName;
-  final String storeAddress;
-  final String storeHours;
-  final PickupStage initialStage;
 
   @override
   State<Orderdetailpage> createState() => _OrderdetailpageState();
 }
 
 class _OrderdetailpageState extends State<Orderdetailpage> {
-  late PickupStage _stage = widget.initialStage;
-  late bool _pickedUp = widget.initialStage == PickupStage.completed;
+  OrderDetail? _order;
+  String? _error;
+  bool _busy = false;
 
-  static const _timelineSteps = [
-    '주문 접수',
-    '결제 완료',
-    '본사 상품 준비',
-    '발송 시작·매장 이동',
-    '입고·검수',
-    '수령 준비 완료',
-  ];
-
-  String _formatWon(int value) {
-    final digits = value.toString();
-    final buffer = StringBuffer();
-    for (var i = 0; i < digits.length; i++) {
-      final remaining = digits.length - i;
-      if (i > 0 && remaining % 3 == 0) buffer.write(',');
-      buffer.write(digits[i]);
-    }
-    return '₩$buffer';
+  @override
+  void initState() {
+    super.initState();
+    _load();
   }
 
-  Future<void> _openPickupQr() async {
+  Future<void> _load() async {
+    setState(() => _error = null);
+    try {
+      final order = await OrderApi.order(widget.orderNumber);
+      if (mounted) setState(() => _order = order);
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    }
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _openPickupQr(OrderDetail order) async {
     final pickedUp = await Get.to<bool>(
-      () => Pickupqrpage(
-        orderNumber: widget.orderNumber,
-        storeName: widget.storeName,
-        brand: widget.brand,
-        productName: widget.productName,
-        colorLabel: widget.colorLabel,
-        price: widget.price,
-        quantity: widget.quantity,
-        alreadyPickedUp: _pickedUp,
+      () => Pickupqrpage(orderNumber: order.orderNumber),
+    );
+    if (pickedUp == true) _load();
+  }
+
+  Future<void> _cancelOrder(OrderDetail order) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('주문을 취소할까요?'),
+        content: const Text('사용한 쿠폰은 유효기간이 남아 있으면 다시 사용할 수 있습니다.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('닫기'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('주문 취소'),
+          ),
+        ],
       ),
     );
-    if (pickedUp == true) {
-      setState(() {
-        _pickedUp = true;
-        _stage = PickupStage.completed;
-      });
+    if (confirmed != true) return;
+    setState(() => _busy = true);
+    try {
+      final updated = await OrderApi.cancelOrder(order.orderNumber);
+      if (!mounted) return;
+      setState(() => _order = updated);
+      _showMessage('주문이 취소되었습니다.');
+    } catch (error) {
+      if (mounted) _showMessage(error.toString());
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
-  void _requestExchange() {
-    Get.to(
+  Future<void> _requestExchange(OrderDetail order, OrderLine item) async {
+    await Get.to(
       () => Exchangerequestpage(
-        brand: widget.brand,
-        productName: widget.productName,
-        colorLabel: widget.colorLabel,
-        price: widget.price,
-        quantity: widget.quantity,
-        currentSize: widget.sizeLabel,
+        orderNumber: order.orderNumber,
+        orderItemId: item.orderItemId,
       ),
     );
+    _load();
   }
 
-  void _requestReturn() {
-    Get.to(
+  Future<void> _requestReturn(OrderDetail order, OrderLine item) async {
+    await Get.to(
       () => Returnrequestpage(
-        brand: widget.brand,
-        productName: widget.productName,
-        colorLabel: widget.colorLabel,
-        price: widget.price,
-        quantity: widget.quantity,
+        orderNumber: order.orderNumber,
+        orderItemId: item.orderItemId,
       ),
     );
+    _load();
   }
 
   void _goPurchaseHistory() => Get.to(() => const Orderhistorypage());
 
-  void _writeReview() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('리뷰 작성 기능은 준비 중입니다.')),
-    );
-  }
+  void _writeReview() => Get.to(() => const ReviewWritePage());
 
-  // TODO: 네이버 지도(웹) API 연동 예정. 지금은 UI 자리만 잡아두고,
-  // 추후 매장 좌표/주소로 네이버 지도 웹 페이지를 WebView나 외부 브라우저로 띄운다.
-  void _openMapView() {
+  // TODO: 네이버 지도(웹) API 연동 예정. 서버가 매장 좌표(latitude/longitude)를 함께 내려준다.
+  void _openMapView(OrderDetail order) {
+    final store = order.pickupStore;
     showModalBottomSheet(
       context: context,
       builder: (context) {
@@ -133,12 +119,12 @@ class _OrderdetailpageState extends State<Orderdetailpage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                widget.storeName,
+                order.storeName,
                 style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 4),
               Text(
-                widget.storeAddress,
+                order.storeAddress,
                 style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
               ),
               const SizedBox(height: 16),
@@ -155,7 +141,9 @@ class _OrderdetailpageState extends State<Orderdetailpage> {
               ),
               const SizedBox(height: 12),
               Text(
-                '네이버 지도 연동은 준비 중입니다. 연동되면 이 영역에 실제 지도가 표시됩니다.',
+                store?.latitude == null
+                    ? '네이버 지도 연동은 준비 중입니다.'
+                    : '네이버 지도 연동은 준비 중입니다. (좌표 ${store!.latitude}, ${store.longitude})',
                 style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
               ),
             ],
@@ -167,61 +155,78 @@ class _OrderdetailpageState extends State<Orderdetailpage> {
 
   @override
   Widget build(BuildContext context) {
-    final completed = _stage == PickupStage.completed;
-
+    final order = _order;
     return Scaffold(
       appBar: AppBar(
         title: Text('주문·준비상태'),
         centerTitle: true,
         actions: [
           IconButton(
-            onPressed: () => Get.to(Cartpage()),
+            onPressed: () => Get.to(() => const Cartpage()),
             icon: Icon(Icons.shopping_bag_outlined),
           ),
         ],
       ),
       body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+        child: _error != null
+            ? _buildErrorState(_error!)
+            : order == null
+            ? const Center(child: CircularProgressIndicator())
+            : Column(
                 children: [
-                  if (completed) ...[
-                    _buildCompletedHeader(),
-                    const SizedBox(height: 20),
-                    _sectionTitle('주문 진행 상황'),
-                    const SizedBox(height: 10),
-                    _buildTimeline(),
-                    const SizedBox(height: 24),
-                  ],
-                  _sectionTitle('상품별 준비 상태'),
-                  const SizedBox(height: 10),
-                  _buildProductCard(completed),
-                  const SizedBox(height: 24),
-                  _sectionTitle('사이즈·수령 매장'),
-                  const SizedBox(height: 10),
-                  _buildStoreCard(),
-                  const SizedBox(height: 10),
-                  _buildLockNotice(),
-                  const SizedBox(height: 24),
-                  _sectionTitle('결제 상세'),
-                  const SizedBox(height: 10),
-                  if (completed)
-                    _buildCompletedPaymentSection()
-                  else
-                    _buildPreparingPaymentSection(),
-                  const SizedBox(height: 20),
-                  _buildDemoStageToggle(),
-                  const SizedBox(height: 10),
-                  Text(
-                    '상태는 화면 검증용 시연입니다. 푸시 알림·배송 추적·실시간 재고 서비스는 연결되지 않았습니다.',
-                    style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                  Expanded(
+                    child: RefreshIndicator(
+                      onRefresh: _load,
+                      child: ListView(
+                        padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+                        children: [
+                          _buildHeader(order),
+                          const SizedBox(height: 20),
+                          if (!order.isCancelled) ...[
+                            _sectionTitle('주문 진행 상황'),
+                            const SizedBox(height: 10),
+                            _buildTimeline(order),
+                            const SizedBox(height: 24),
+                          ],
+                          _sectionTitle('상품별 준비 상태'),
+                          const SizedBox(height: 10),
+                          for (final item in order.items) ...[
+                            _buildProductCard(order, item),
+                            const SizedBox(height: 10),
+                          ],
+                          const SizedBox(height: 14),
+                          _sectionTitle('수령 매장'),
+                          const SizedBox(height: 10),
+                          _buildStoreCard(order),
+                          if (!order.canCancel && !order.pickedUp && !order.isCancelled) ...[
+                            const SizedBox(height: 10),
+                            _buildLockNotice(),
+                          ],
+                          const SizedBox(height: 24),
+                          _sectionTitle('결제 상세'),
+                          const SizedBox(height: 10),
+                          _buildPaymentSection(order),
+                        ],
+                      ),
+                    ),
                   ),
+                  _buildBottomActions(order),
                 ],
               ),
-            ),
-            _buildBottomActions(completed),
+      ),
+    );
+  }
+
+  Widget _buildErrorState(String message) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(message, textAlign: TextAlign.center),
+            const SizedBox(height: 12),
+            OutlinedButton(onPressed: _load, child: const Text('다시 시도')),
           ],
         ),
       ),
@@ -235,12 +240,19 @@ class _OrderdetailpageState extends State<Orderdetailpage> {
     );
   }
 
-  Widget _buildCompletedHeader() {
+  Widget _buildHeader(OrderDetail order) {
+    final (IconData icon, Color color, String title, String message) = order.pickedUp
+        ? (Icons.check, Colors.green, '좋은 신발과 좋은 하루를', '매장 수령이 완료되었어요. 착용 후기를 들려주세요.')
+        : order.isCancelled
+        ? (Icons.close, Colors.grey, '취소된 주문입니다', '주문이 취소되어 상품이 발송되지 않습니다.')
+        : order.status == 'READY'
+        ? (Icons.inventory_2_outlined, Colors.black, '수령 준비가 완료되었어요', '매장에 방문해 수령증을 보여주세요.')
+        : (Icons.local_shipping_outlined, Colors.black, order.statusLabel, '본사에서 수령 매장으로 보내는 주문입니다. 도착·검수 후 픽업을 안내합니다.');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'DEMO ORDER · ${widget.orderNumber}',
+          'ORDER · ${order.orderNumber} · ${formatDate(order.orderedAt)}',
           style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.bold,
@@ -255,67 +267,86 @@ class _OrderdetailpageState extends State<Orderdetailpage> {
               Container(
                 width: 48,
                 height: 48,
-                decoration: const BoxDecoration(
-                  color: Colors.green,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.check, color: Colors.white),
+                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                child: Icon(icon, color: Colors.white),
               ),
               const SizedBox(height: 14),
-              const Text(
-                '좋은 신발과 좋은 하루를',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              Text(
+                title,
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 6),
               Text(
-                '매장 수령이 완료되었어요. 착용 후기를 들려주세요.',
+                message,
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 16),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.grey.shade100,
-            borderRadius: BorderRadius.circular(8),
+        if (order.status == 'READY' && order.pickupDueAt != null) ...[
+          const SizedBox(height: 16),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              '${formatDate(order.pickupDueAt!)}까지 매장 운영시간 내 방문해 주세요.',
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+            ),
           ),
-          child: Text(
-            '본사에서 수령 매장으로 보내는 주문입니다. 도착·검수 후 픽업을 안내합니다.',
-            style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTimeline() {
-    return Column(
-      children: [
-        for (final step in _timelineSteps) ...[
-          Row(
-            children: [
-              const Icon(Icons.check_circle, color: Colors.green, size: 20),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(step, style: const TextStyle(fontSize: 14)),
-              ),
-              Text(
-                '처리 완료',
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
-              ),
-            ],
-          ),
-          if (step != _timelineSteps.last) const SizedBox(height: 10),
         ],
       ],
     );
   }
 
-  Widget _buildProductCard(bool completed) {
+  Widget _buildTimeline(OrderDetail order) {
+    return Column(
+      children: [
+        for (final step in order.timeline) ...[
+          Row(
+            children: [
+              Icon(
+                step.done ? Icons.check_circle : Icons.radio_button_unchecked,
+                color: step.done ? Colors.green : Colors.grey.shade400,
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  step.label,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: step.current ? FontWeight.bold : FontWeight.normal,
+                    color: step.done ? Colors.black : Colors.grey.shade500,
+                  ),
+                ),
+              ),
+              Text(
+                step.current
+                    ? '진행 중'
+                    : step.done
+                    ? '처리 완료'
+                    : '대기',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+              ),
+            ],
+          ),
+          if (step != order.timeline.last) const SizedBox(height: 10),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildProductCard(OrderDetail order, OrderLine item) {
+    final statusColor = order.pickedUp
+        ? const Color(0xFF1F5A46)
+        : order.isCancelled
+        ? Colors.grey
+        : const Color(0xFFB7791F);
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -327,22 +358,14 @@ class _OrderdetailpageState extends State<Orderdetailpage> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade200,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.image_outlined, color: Colors.grey),
-              ),
+              _buildThumbnail(item.imageUrl),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      widget.brand,
+                      item.brand,
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
@@ -351,7 +374,7 @@ class _OrderdetailpageState extends State<Orderdetailpage> {
                       ),
                     ),
                     Text(
-                      widget.productName,
+                      item.name,
                       style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.bold,
@@ -359,12 +382,12 @@ class _OrderdetailpageState extends State<Orderdetailpage> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      widget.colorLabel,
+                      item.optionLabel,
                       style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      _formatWon(widget.price),
+                      formatWon(item.price),
                       style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
@@ -379,28 +402,78 @@ class _OrderdetailpageState extends State<Orderdetailpage> {
           Row(
             children: [
               Text(
-                '구매 ${widget.sizeLabel} · ${widget.quantity}개',
+                '구매 ${item.sizeLabel} · ${item.quantity}개',
                 style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
               ),
               const Spacer(),
               Text(
-                completed ? '수령 완료' : '준비 완료',
+                order.statusLabel,
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
-                  color: completed
-                      ? const Color(0xFF1F5A46)
-                      : const Color(0xFFB7791F),
+                  color: statusColor,
                 ),
               ),
             ],
           ),
+          if (order.canClaim) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _outlinedButton(
+                    '교환 신청',
+                    () => _requestExchange(order, item),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _outlinedButton(
+                    '반품 신청',
+                    () => _requestReturn(order, item),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
   }
 
-  Widget _buildStoreCard() {
+  Widget _buildThumbnail(String? url) {
+    return Container(
+      width: 56,
+      height: 56,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: Colors.grey.shade200,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: url == null
+          ? const Icon(Icons.image_outlined, color: Colors.grey)
+          : Image.network(
+              url,
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) =>
+                  const Icon(Icons.image_outlined, color: Colors.grey),
+            ),
+    );
+  }
+
+  Widget _outlinedButton(String label, VoidCallback onPressed) {
+    return OutlinedButton(
+      onPressed: onPressed,
+      style: OutlinedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        side: BorderSide(color: Colors.grey.shade300),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      child: Text(label, style: const TextStyle(color: Colors.black)),
+    );
+  }
+
+  Widget _buildStoreCard(OrderDetail order) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -419,14 +492,14 @@ class _OrderdetailpageState extends State<Orderdetailpage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      widget.storeName,
+                      order.storeName,
                       style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     Text(
-                      widget.storeAddress,
+                      order.storeAddress,
                       style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                     ),
                   ],
@@ -434,14 +507,16 @@ class _OrderdetailpageState extends State<Orderdetailpage> {
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            widget.storeHours,
-            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-          ),
+          if (order.pickupStore != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              '담당자 ${order.pickupStore!.manager}',
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+            ),
+          ],
           const SizedBox(height: 8),
           GestureDetector(
-            onTap: _openMapView,
+            onTap: () => _openMapView(order),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -477,7 +552,7 @@ class _OrderdetailpageState extends State<Orderdetailpage> {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              '발송이 시작되어 사이즈와 수령 매장을 변경할 수 없습니다.',
+              '발송이 시작되어 주문 취소와 수령 매장 변경을 할 수 없습니다.',
               style: TextStyle(fontSize: 12, color: Colors.brown.shade700),
             ),
           ),
@@ -486,194 +561,79 @@ class _OrderdetailpageState extends State<Orderdetailpage> {
     );
   }
 
-  Widget _buildCompletedPaymentSection() {
-    final total = widget.price * widget.quantity;
-    return Column(
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text('상품 금액', style: TextStyle(color: Colors.grey.shade700)),
-            Text(_formatWon(total)),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(widget.paymentMethod, style: TextStyle(color: Colors.grey.shade700)),
-            Text(_formatWon(total)),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: _requestExchange,
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  side: BorderSide(color: Colors.grey.shade300),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                child: const Text('교환 신청', style: TextStyle(color: Colors.black)),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: OutlinedButton(
-                onPressed: _requestReturn,
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  side: BorderSide(color: Colors.grey.shade300),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                child: const Text('반품 신청', style: TextStyle(color: Colors.black)),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPreparingPaymentSection() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        '모든 상품이 준비되었습니다. 매장에 수령증을 보여주세요.',
-        style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
-      ),
-    );
-  }
-
-  Widget _buildDemoStageToggle() {
-    return Theme(
-      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-      child: ExpansionTile(
-        tilePadding: EdgeInsets.zero,
-        childrenPadding: const EdgeInsets.only(bottom: 8),
-        title: Text(
-          '시연 상태 변경 · 실제 주문에 영향 없음',
-          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-        ),
+  Widget _buildPaymentSection(OrderDetail order) {
+    Widget row(String label, String value, {bool bold = false}) => Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () =>
-                      setState(() => _stage = PickupStage.preparing),
-                  style: OutlinedButton.styleFrom(
-                    backgroundColor: _stage == PickupStage.preparing
-                        ? Colors.black
-                        : Colors.white,
-                    foregroundColor: _stage == PickupStage.preparing
-                        ? Colors.white
-                        : Colors.black,
-                    side: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  child: const Text('준비 중'),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () =>
-                      setState(() => _stage = PickupStage.completed),
-                  style: OutlinedButton.styleFrom(
-                    backgroundColor: _stage == PickupStage.completed
-                        ? Colors.black
-                        : Colors.white,
-                    foregroundColor: _stage == PickupStage.completed
-                        ? Colors.white
-                        : Colors.black,
-                    side: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  child: const Text('수령 완료'),
-                ),
-              ),
-            ],
+          Text(label, style: TextStyle(color: Colors.grey.shade700)),
+          Text(
+            value,
+            style: TextStyle(fontWeight: bold ? FontWeight.bold : FontWeight.normal),
           ),
         ],
       ),
     );
+    return Column(
+      children: [
+        row('상품 금액', formatWon(order.subtotal)),
+        row(order.couponName == null ? '쿠폰 할인' : '쿠폰 할인 (${order.couponName})',
+            formatWon(-order.discount)),
+        row(order.paymentMethod, formatWon(order.paidAmount), bold: true),
+        row('주문자', '${order.ordererName} · ${order.ordererPhone}'),
+      ],
+    );
   }
 
-  Widget _buildBottomActions(bool completed) {
+  Widget _buildBottomActions(OrderDetail order) {
+    final Widget child;
+    if (order.pickedUp) {
+      child = Row(
+        children: [
+          Expanded(child: _outlinedButton('구매 내역', _goPurchaseHistory)),
+          const SizedBox(width: 10),
+          Expanded(child: _primaryButton('리뷰 작성', _writeReview)),
+        ],
+      );
+    } else if (order.status == 'READY') {
+      child = _primaryButton('매장 수령증 보기', () => _openPickupQr(order), icon: Icons.qr_code_2);
+    } else if (order.canCancel) {
+      child = _primaryButton(_busy ? '취소 처리 중…' : '주문 취소', _busy ? null : () => _cancelOrder(order));
+    } else if (order.isCancelled) {
+      child = _outlinedButton('구매 내역', _goPurchaseHistory);
+    } else {
+      child = _primaryButton('매장 도착 후 수령증이 열립니다', null);
+    }
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
       decoration: BoxDecoration(
         color: Theme.of(context).scaffoldBackgroundColor,
         border: Border(top: BorderSide(color: Colors.grey.shade200)),
       ),
-      child: completed
-          ? Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: _goPurchaseHistory,
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      side: BorderSide(color: Colors.grey.shade300),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    child: const Text('구매 내역', style: TextStyle(color: Colors.black)),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: _writeReview,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.black,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    child: const Text('리뷰 작성'),
-                  ),
-                ),
-              ],
-            )
-          : SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                onPressed: _openPickupQr,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.black,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.qr_code_2, size: 20),
-                    SizedBox(width: 8),
-                    Text(
-                      '매장 수령증 보기',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+      child: SizedBox(width: double.infinity, child: child),
+    );
+  }
+
+  Widget _primaryButton(String label, VoidCallback? onPressed, {IconData? icon}) {
+    return SizedBox(
+      height: 50,
+      child: ElevatedButton(
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.black,
+          foregroundColor: Colors.white,
+          disabledBackgroundColor: Colors.grey.shade300,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (icon != null) ...[Icon(icon, size: 20), const SizedBox(width: 8)],
+            Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+          ],
+        ),
+      ),
     );
   }
 }

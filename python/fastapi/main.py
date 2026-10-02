@@ -14,6 +14,7 @@ from .accounts import FirebaseCredentialsConfigurationError, get_accounts
 from .dependencies import get_local
 from . import app_settings
 from .discover.router import router as discover_router
+from .order.router import router as order_router
 from .user.main import router as user_router
 
 
@@ -36,6 +37,7 @@ for module in (login, signup, review_write, review_management, notifications, ap
 
 # 최신 main의 상품/마이페이지 API도 같은 서버에 등록한다.
 app.include_router(discover_router)
+app.include_router(order_router)
 app.include_router(user_router)
 
 
@@ -49,6 +51,7 @@ _SWAGGER_REQUIRED_PATHS = (
     '/api/settings',
     '/api/support/faqs',
     '/api/v1/discover/products',
+    '/api/v1/order/cart',
     '/api/v1/mypage/summary',
     '/api/v1/test/status',
     '/api/v1/test/firebase',
