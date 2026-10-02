@@ -1,6 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import 'package:bootcamp_teamproject_1/discover/home_page.dart';
+import 'package:bootcamp_teamproject_1/discover/product_list_page.dart';
+import 'package:bootcamp_teamproject_1/order/cartPage.dart';
+import 'package:bootcamp_teamproject_1/order/orderHistoryPage.dart';
+import 'package:bootcamp_teamproject_1/user/authController.dart';
+import 'package:bootcamp_teamproject_1/user/loginpage.dart';
+import 'package:bootcamp_teamproject_1/user/mypage/my_page.dart';
+
 /// 마이페이지 하위 화면 공통 색상
 class MpColors {
   static const Color ink = Color(0xFF1B2A33);
@@ -33,13 +41,31 @@ PreferredSizeWidget mpAppBar(String title) {
     ),
     actions: [
       IconButton(
-        onPressed: () {
-          // TODO: 장바구니 이동
-        },
+        onPressed: () => Get.to(() => const Cartpage()),
         icon: const Icon(Icons.shopping_bag_outlined, color: MpColors.ink),
       ),
     ],
   );
+}
+
+// 로그인하지 않은 상태라면 로그인 화면으로, 로그인된 상태라면 요청한 화면으로 이동합니다.
+void _goToMpIfLoggedIn(Widget Function() builder) {
+  Get.to(AuthController.to.isLoggedIn.value ? builder : () => const LoginPage());
+}
+
+void _goToMpTab(int index) {
+  switch (index) {
+    case 0:
+      Get.to(() => const HomePage());
+    case 1:
+      Get.to(() => const ProductListPage());
+    case 2:
+      _goToMpIfLoggedIn(() => const Cartpage());
+    case 3:
+      _goToMpIfLoggedIn(() => const Orderhistorypage());
+    case 4:
+      _goToMpIfLoggedIn(() => const MyPage());
+  }
 }
 
 /// 하단 영역: (선택) 고정 액션 버튼 + 탭바
@@ -107,14 +133,14 @@ class MpTabBar extends StatelessWidget {
           height: 64,
           child: Row(
             children: const [
-              _Tab(Icons.home_outlined, Icons.home, '홈', false),
-              _Tab(Icons.grid_view_outlined, Icons.grid_view, '카테고리', false),
+              _Tab(Icons.home_outlined, Icons.home, '홈', false, 0),
+              _Tab(Icons.grid_view_outlined, Icons.grid_view, '카테고리', false, 1),
               _Tab(Icons.shopping_bag_outlined, Icons.shopping_bag, '장바구니',
-                  false,
+                  false, 2,
                   badge: 1),
               _Tab(Icons.receipt_long_outlined, Icons.receipt_long, '주문내역',
-                  false),
-              _Tab(Icons.person_outline, Icons.person, '마이', true),
+                  false, 3),
+              _Tab(Icons.person_outline, Icons.person, '마이', true, 4),
             ],
           ),
         ),
@@ -128,9 +154,10 @@ class _Tab extends StatelessWidget {
   final IconData activeIcon;
   final String label;
   final bool selected;
+  final int index;
   final int badge;
 
-  const _Tab(this.icon, this.activeIcon, this.label, this.selected,
+  const _Tab(this.icon, this.activeIcon, this.label, this.selected, this.index,
       {this.badge = 0});
 
   @override
@@ -138,14 +165,12 @@ class _Tab extends StatelessWidget {
     final Color color = selected ? MpColors.ink : MpColors.sub;
     return Expanded(
       child: InkWell(
-        onTap: () {
-          // TODO: 탭 이동
-        },
+        onTap: () => _goToMpTab(index),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Badge(
-              isLabelVisible: badge > 0,
+              isLabelVisible: badge > 0 && AuthController.to.isLoggedIn.value,
               label: Text('$badge'),
               backgroundColor: const Color(0xFFC0392B),
               child: Icon(selected ? activeIcon : icon, color: color, size: 26),

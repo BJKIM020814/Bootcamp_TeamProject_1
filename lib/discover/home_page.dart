@@ -1,6 +1,11 @@
 import 'package:bootcamp_teamproject_1/discover/product_detail_page.dart';
 import 'package:bootcamp_teamproject_1/discover/product_list_page.dart';
 import 'package:bootcamp_teamproject_1/discover/store_selection_page.dart';
+import 'package:bootcamp_teamproject_1/order/cartPage.dart';
+import 'package:bootcamp_teamproject_1/order/orderHistoryPage.dart';
+import 'package:bootcamp_teamproject_1/user/authController.dart';
+import 'package:bootcamp_teamproject_1/user/loginpage.dart';
+import 'package:bootcamp_teamproject_1/user/mypage/my_page.dart';
 import 'package:flutter/material.dart';
 
 class HomePage extends StatefulWidget {
@@ -411,7 +416,16 @@ class _HomePageState extends State<HomePage> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: 0,
         onDestinationSelected: (index) {
-          if (index == 1) _openProductList();
+          switch (index) {
+            case 1:
+              _openProductList();
+            case 2:
+              _openCart();
+            case 3:
+              _openOrderHistory();
+            case 4:
+              _openMyPage();
+          }
         },
         height: 66,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
@@ -426,10 +440,7 @@ class _HomePageState extends State<HomePage> {
             label: '카테고리',
           ),
           NavigationDestination(
-            icon: Badge(
-              label: Text('1'),
-              child: Icon(Icons.shopping_bag_outlined),
-            ),
+            icon: CartBadgeIcon(),
             label: '장바구니',
           ),
           NavigationDestination(
@@ -459,6 +470,23 @@ class _HomePageState extends State<HomePage> {
   void _openStoreSelection() => Navigator.of(
     context,
   ).push(MaterialPageRoute(builder: (_) => const StoreSelectionPage()));
+
+  // 로그인하지 않은 상태라면 로그인 화면으로, 로그인된 상태라면 요청한 화면으로 이동합니다.
+  void _openIfLoggedIn(Widget Function() builder) {
+    final target = AuthController.to.isLoggedIn.value
+        ? builder()
+        : const LoginPage();
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => target));
+  }
+
+  // 하단 탭바의 장바구니 탭으로 이동합니다.
+  void _openCart() => _openIfLoggedIn(() => const Cartpage());
+
+  // 하단 탭바의 주문내역 탭으로 이동합니다.
+  void _openOrderHistory() => _openIfLoggedIn(() => const Orderhistorypage());
+
+  // 하단 탭바의 마이 탭으로 이동합니다.
+  void _openMyPage() => _openIfLoggedIn(() => const MyPage());
 }
 
 class _ProductCard extends StatelessWidget {

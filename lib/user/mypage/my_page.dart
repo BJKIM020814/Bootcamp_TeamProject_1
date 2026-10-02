@@ -1,6 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import 'package:bootcamp_teamproject_1/discover/home_page.dart';
+import 'package:bootcamp_teamproject_1/discover/product_list_page.dart';
+import 'package:bootcamp_teamproject_1/discover/store_selection_page.dart';
+import 'package:bootcamp_teamproject_1/order/cartPage.dart';
+import 'package:bootcamp_teamproject_1/order/orderHistoryPage.dart';
+import 'package:bootcamp_teamproject_1/user/authController.dart';
+import 'package:bootcamp_teamproject_1/user/loginpage.dart';
+import 'package:bootcamp_teamproject_1/user/mypage/coupon_page.dart';
+import 'package:bootcamp_teamproject_1/user/mypage/customersupportpage.dart';
+import 'package:bootcamp_teamproject_1/user/mypage/mypage_sample_data.dart';
+import 'package:bootcamp_teamproject_1/user/mypage/profile_page.dart';
+import 'package:bootcamp_teamproject_1/user/mypage/recently_viewed_page.dart';
+import 'package:bootcamp_teamproject_1/user/mypage/reviewmanagementpage.dart';
+import 'package:bootcamp_teamproject_1/user/mypage/settingspage.dart';
+import 'package:bootcamp_teamproject_1/user/mypage/wishlist_page.dart';
+
 class MyPage extends StatefulWidget {
   const MyPage({super.key});
 
@@ -15,7 +31,7 @@ class _MyPageState extends State<MyPage> {
   static const Color _navy = Color(0xFF263B45);
   static const Color _panel = Color(0xFFF4F6F7);
 
-  int _tabIndex = 4;
+  final int _tabIndex = 4;
 
   final List<_MenuItem> _menus = const [
     _MenuItem(Icons.receipt_long_outlined, '주문 · 수령 내역'),
@@ -52,9 +68,7 @@ class _MyPageState extends State<MyPage> {
         ),
         actions: [
           IconButton(
-            onPressed: () {
-              // TODO: 장바구니 이동
-            },
+            onPressed: () => Get.to(() => const Cartpage()),
             icon: const Icon(Icons.shopping_bag_outlined, color: _ink),
           ),
         ],
@@ -125,9 +139,7 @@ class _MyPageState extends State<MyPage> {
               ),
               const SizedBox(height: 8),
               InkWell(
-                onTap: () {
-                  // TODO: 내 정보 수정 이동
-                },
+                onTap: () => Get.to(() => ProfilePage(profile: sampleProfile)),
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -254,9 +266,7 @@ class _MyPageState extends State<MyPage> {
                 ),
                 const SizedBox(height: 14),
                 InkWell(
-                  onTap: () {
-                    // TODO: 사이즈 변경 이동
-                  },
+                  onTap: () => Get.to(() => ProfilePage(profile: sampleProfile)),
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -277,11 +287,32 @@ class _MyPageState extends State<MyPage> {
     );
   }
 
+  void _openMenu(_MenuItem item) {
+    switch (item.title) {
+      case '주문 · 수령 내역':
+        Get.to(() => const Orderhistorypage());
+      case '찜한 상품':
+        Get.to(() => WishlistPage(products: sampleWishlist()));
+      case '내 정보':
+        Get.to(() => ProfilePage(profile: sampleProfile));
+      case '자주 찾는 매장':
+        Get.to(() => const StoreSelectionPage());
+      case '리뷰 관리':
+        Get.to(() => const ReviewManagementPage());
+      case '최근 본 상품':
+        Get.to(() => RecentlyViewedPage(products: sampleRecentlyViewed()));
+      case '쿠폰함':
+        Get.to(() => CouponPage(coupons: sampleCoupons));
+      case '고객센터':
+        Get.to(() => const CustomerSupportPage());
+      case '앱 설정':
+        Get.to(() => const SettingsPage());
+    }
+  }
+
   Widget _buildMenuTile(_MenuItem item) {
     return InkWell(
-      onTap: () {
-        // TODO: ${item.title} 화면 이동
-      },
+      onTap: () => _openMenu(item),
       child: Container(
         height: 64,
         decoration: const BoxDecoration(
@@ -337,18 +368,39 @@ class _MyPageState extends State<MyPage> {
     );
   }
 
+  // 로그인하지 않은 상태라면 로그인 화면으로, 로그인된 상태라면 요청한 화면으로 이동합니다.
+  void _goToIfLoggedIn(Widget Function() builder) {
+    Get.to(AuthController.to.isLoggedIn.value ? builder : () => const LoginPage());
+  }
+
+  void _goToTab(int index) {
+    if (index == _tabIndex) return;
+    switch (index) {
+      case 0:
+        Get.to(() => const HomePage());
+      case 1:
+        Get.to(() => const ProductListPage());
+      case 2:
+        _goToIfLoggedIn(() => const Cartpage());
+      case 3:
+        _goToIfLoggedIn(() => const Orderhistorypage());
+      case 4:
+        _goToIfLoggedIn(() => const MyPage());
+    }
+  }
+
   Widget _tabItem(int index, IconData icon, IconData activeIcon, String label,
       {int badge = 0}) {
     final bool selected = _tabIndex == index;
     final Color color = selected ? _ink : const Color(0xFF8A96A0);
     return Expanded(
       child: InkWell(
-        onTap: () => setState(() => _tabIndex = index),
+        onTap: () => _goToTab(index),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Badge(
-              isLabelVisible: badge > 0,
+              isLabelVisible: badge > 0 && AuthController.to.isLoggedIn.value,
               label: Text('$badge'),
               backgroundColor: const Color(0xFFC0392B),
               child: Icon(selected ? activeIcon : icon, color: color, size: 26),

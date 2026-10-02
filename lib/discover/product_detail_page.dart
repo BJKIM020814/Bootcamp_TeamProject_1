@@ -1,6 +1,9 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
+import 'package:bootcamp_teamproject_1/user/authController.dart';
+import 'package:bootcamp_teamproject_1/user/loginpage.dart';
+
 class ProductDetailPage extends StatefulWidget {
   const ProductDetailPage({super.key});
 
@@ -29,10 +32,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('장바구니 기능은 서버 연결 후 사용할 수 있습니다.')),
             ),
-            icon: const Badge(
-              label: Text('1'),
-              child: Icon(Icons.shopping_bag_outlined),
-            ),
+            icon: const CartBadgeIcon(),
             tooltip: '장바구니 보기',
           ),
         ],
@@ -58,9 +58,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             const SizedBox(width: 10),
             Expanded(
               child: FilledButton(
-                onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('주문 기능은 서버 연결 후 사용할 수 있습니다.')),
-                ),
+                onPressed: _buyNow,
                 style: FilledButton.styleFrom(
                   minimumSize: const Size.fromHeight(54),
                   backgroundColor: const Color(0xFF26221F),
@@ -437,6 +435,19 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             ),
         ],
       ),
+    );
+  }
+
+  // 로그인하지 않은 상태라면 로그인 화면으로 이동합니다.
+  void _buyNow() {
+    if (!AuthController.to.isLoggedIn.value) {
+      Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (_) => const LoginPage()));
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('주문 기능은 서버 연결 후 사용할 수 있습니다.')),
     );
   }
 }
