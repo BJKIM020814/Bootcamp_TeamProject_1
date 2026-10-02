@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 
+import 'package:bootcamp_teamproject_1/services/api_client.dart';
+
 import 'mypage_common.dart';
 
 /// 찜한 상품 / 최근 본 상품 공용 상품 모델
 class MpProduct {
+  final String pCode; // product.p_code
   final String brand; // 나이키, 아디다스 ...
   final String brandEn; // NIKE ...
   final String name;
@@ -15,21 +18,51 @@ class MpProduct {
   bool liked;
 
   MpProduct({
+    this.pCode = '',
     required this.brand,
     required this.brandEn,
     required this.name,
     required this.price,
     required this.target,
     required this.targetLabel,
-    required this.purpose,
+    this.purpose = '', // DB 에 용도 컬럼이 없어 비어 있을 수 있다
     this.imageUrl,
     this.liked = false,
   });
+
+  static const _brandEn = {
+    '나이키': 'NIKE',
+    '아디다스': 'ADIDAS',
+    '뉴발란스': 'NEW BALANCE',
+    '아식스': 'ASICS',
+    '푸마': 'PUMA',
+  };
+
+  /// 서버(/wishlist, /recently-viewed) 응답으로 만든다.
+  factory MpProduct.fromJson(Map<String, dynamic> json) {
+    final brand = json['brand'] as String;
+    final gender = json['gender'] as String;
+    return MpProduct(
+      pCode: json['p_code'] as String,
+      brand: brand,
+      brandEn: _brandEn[brand] ?? brand,
+      name: json['name'] as String,
+      price: json['price'] as int,
+      target: gender.contains('여')
+          ? '여성용'
+          : (gender.contains('아동') ? '아동용' : '남성·공용'),
+      targetLabel: gender,
+      imageUrl: ApiClient.absoluteUrl(json['image_url'] as String),
+      liked: json['liked'] as bool,
+    );
+  }
 }
 
 String _won(int v) {
   final s = v.toString().replaceAllMapped(
-      RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m[1]},');
+    RegExp(r'(\d)(?=(\d{3})+$)'),
+    (m) => '${m[1]},',
+  );
   return '₩$s';
 }
 
@@ -40,10 +73,14 @@ class MpProductListView extends StatefulWidget {
   /// true면 하트를 해제했을 때 목록에서 제거 (찜한 상품)
   final bool removeOnUnlike;
 
+  /// 하트를 눌렀을 때 서버에 반영하는 콜백. p.liked 는 이미 바뀐 값이며, 던지면 되돌린다.
+  final Future<void> Function(MpProduct product)? onToggleLike;
+
   const MpProductListView({
     super.key,
     required this.products,
     this.removeOnUnlike = false,
+    this.onToggleLike,
   });
 
   @override
@@ -56,7 +93,7 @@ class _MpProductListViewState extends State<MpProductListView> {
   static const _purposes = ['전체', '러닝화', '데일리', '클래식', '아웃도어'];
   static const _sorts = ['추천순', '낮은 가격순', '높은 가격순'];
 
-  late final List<MpProduct> _items =List.of(widget.products);
+  late final List<MpProduct> _items = List.of(widget.products);
   String _query = '';
   String _target = '전체';
   String _brand = '전체';
@@ -66,7 +103,8 @@ class _MpProductListViewState extends State<MpProductListView> {
   List<MpProduct> get _filtered {
     final list = _items.where((p) {
       final q = _query.trim().toLowerCase();
-      final matchQuery = q.isEmpty ||
+      final matchQuery =
+          q.isEmpty ||
           p.name.toLowerCase().contains(q) ||
           p.brand.toLowerCase().contains(q) ||
           p.brandEn.toLowerCase().contains(q);
@@ -83,11 +121,23 @@ class _MpProductListViewState extends State<MpProductListView> {
     return list;
   }
 
-  void _toggleLike(MpProduct p) {
+  Future<void> _toggleLike(MpProduct p) async {
+    final index = _items.indexOf(p);
     setState(() {
       p.liked = !p.liked;
       if (widget.removeOnUnlike && !p.liked) _items.remove(p);
     });
+    try {
+      await widget.onToggleLike?.call(p);
+    } catch (e) {
+      // 서버 반영에 실패하면 화면도 원래대로 되돌린다.
+      if (!mounted) return;
+      setState(() {
+        p.liked = !p.liked;
+        if (!_items.contains(p)) _items.insert(index < 0 ? 0 : index, p);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
   }
 
   @override
@@ -98,10 +148,20 @@ class _MpProductListViewState extends State<MpProductListView> {
       children: [
         _buildSearch(),
         const SizedBox(height: 16),
-        _chipSection('대상', _targets, _target, (v) => setState(() => _target = v)),
-        _chipSection('브랜드', _brands, _brand, (v) => setState(() => _brand = v)),
         _chipSection(
-            '용도', _purposes, _purpose, (v) => setState(() => _purpose = v)),
+          '대상',
+          _targets,
+          _target,
+          (v) => setState(() => _target = v),
+        ),
+        _chipSection('브랜드', _brands, _brand, (v) => setState(() => _brand = v)),
+        if (_items.any((p) => p.purpose.isNotEmpty))
+          _chipSection(
+            '용도',
+            _purposes,
+            _purpose,
+            (v) => setState(() => _purpose = v),
+          ),
         const SizedBox(height: 4),
         _buildCountSort(items.length),
         const SizedBox(height: 16),
@@ -109,8 +169,10 @@ class _MpProductListViewState extends State<MpProductListView> {
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 60),
             child: Center(
-              child: Text('조건에 맞는 상품이 없어요.',
-                  style: TextStyle(color: MpColors.sub)),
+              child: Text(
+                '조건에 맞는 상품이 없어요.',
+                style: TextStyle(color: MpColors.sub),
+              ),
             ),
           )
         else
@@ -210,23 +272,31 @@ class _MpProductListViewState extends State<MpProductListView> {
     return Row(
       children: [
         Expanded(
-          child: Text('총 $count개의 상품',
-              style: const TextStyle(fontSize: 13, color: MpColors.sub)),
+          child: Text(
+            '총 $count개의 상품',
+            style: const TextStyle(fontSize: 13, color: MpColors.sub),
+          ),
         ),
         PopupMenuButton<String>(
           initialValue: _sort,
           onSelected: (v) => setState(() => _sort = v),
-          itemBuilder: (_) =>
-              _sorts.map((s) => PopupMenuItem(value: s, child: Text(s))).toList(),
+          itemBuilder: (_) => _sorts
+              .map((s) => PopupMenuItem(value: s, child: Text(s)))
+              .toList(),
           child: Row(
             children: [
               const Icon(Icons.tune, size: 16, color: MpColors.sub),
               const SizedBox(width: 8),
-              Text(_sort,
-                  style: const TextStyle(fontSize: 13, color: MpColors.icon)),
+              Text(
+                _sort,
+                style: const TextStyle(fontSize: 13, color: MpColors.icon),
+              ),
               const SizedBox(width: 12),
-              const Icon(Icons.keyboard_arrow_down,
-                  size: 20, color: MpColors.sub),
+              const Icon(
+                Icons.keyboard_arrow_down,
+                size: 20,
+                color: MpColors.sub,
+              ),
             ],
           ),
         ),
@@ -249,10 +319,24 @@ class _MpProductListViewState extends State<MpProductListView> {
             children: [
               Positioned.fill(
                 child: p.imageUrl != null
-                    ? Image.network(p.imageUrl!, fit: BoxFit.contain)
+                    ? Image.network(
+                        p.imageUrl!,
+                        fit: BoxFit.contain,
+                        // 이미지가 없는 상품은 기본 아이콘을 보여준다.
+                        errorBuilder: (_, _, _) => const Center(
+                          child: Icon(
+                            Icons.snowshoeing,
+                            size: 80,
+                            color: Color(0xFFB5BDC4),
+                          ),
+                        ),
+                      )
                     : const Center(
-                        child: Icon(Icons.snowshoeing,
-                            size: 80, color: Color(0xFFB5BDC4)),
+                        child: Icon(
+                          Icons.snowshoeing,
+                          size: 80,
+                          color: Color(0xFFB5BDC4),
+                        ),
                       ),
               ),
               Positioned(
@@ -279,7 +363,10 @@ class _MpProductListViewState extends State<MpProductListView> {
               Text(
                 p.brandEn,
                 style: const TextStyle(
-                    fontSize: 11, letterSpacing: 0.8, color: MpColors.sub),
+                  fontSize: 11,
+                  letterSpacing: 0.8,
+                  color: MpColors.sub,
+                ),
               ),
               const SizedBox(height: 4),
               Text(
@@ -299,7 +386,9 @@ class _MpProductListViewState extends State<MpProductListView> {
               ),
               const SizedBox(height: 4),
               Text(
-                '${p.targetLabel} · ${p.purpose} · 예시 가격',
+                p.purpose.isEmpty
+                    ? p.targetLabel
+                    : '${p.targetLabel} · ${p.purpose}',
                 style: const TextStyle(fontSize: 11, color: MpColors.sub),
               ),
             ],
