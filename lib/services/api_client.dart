@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'api_config.dart';
 
 /// 서버 응답 오류 / 연결 실패. message 는 화면에 그대로 보여줄 수 있는 문장이다.
 class ApiException implements Exception {
@@ -17,21 +17,11 @@ class ApiException implements Exception {
 
 /// FastAPI(python/fastapi/user) 호출 공통 클라이언트.
 ///
-/// 주소는 실행 환경에 따라 자동 선택한다.
-///  - Android 에뮬레이터: 10.0.2.2 (에뮬레이터에서 본 PC 의 localhost)
-///  - 그 외(웹/Windows/iOS 시뮬레이터): 127.0.0.1
-/// 실기기 등에서는 `--dart-define=API_BASE_URL=http://PC주소:8000` 로 바꿀 수 있다.
+/// 주소는 ApiConfig에서 모든 사용자 API 클라이언트와 공유한다.
+/// `--dart-define=API_BASE_URL=http://서버주소:8000`으로 변경할 수 있다.
 class ApiClient {
   static const _timeout = Duration(seconds: 8);
-  static const _override = String.fromEnvironment('API_BASE_URL');
-
-  static String get baseUrl {
-    if (_override.isNotEmpty) return _override;
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-      return 'http://10.0.2.2:8000';
-    }
-    return 'http://127.0.0.1:8000';
-  }
+  static String get baseUrl => ApiConfig.baseUrl;
 
   /// 서버가 돌려준 상대 경로(/products/..../image)를 전체 주소로 바꾼다.
   static String absoluteUrl(String path) => '$baseUrl$path';

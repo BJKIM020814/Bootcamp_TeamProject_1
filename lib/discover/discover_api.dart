@@ -6,6 +6,7 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import '../services/api_config.dart';
 
 class DiscoverApiException implements Exception {
   const DiscoverApiException(this.message, {this.statusCode});
@@ -112,7 +113,7 @@ class DiscoverApi {
 
   static const _baseUrl = String.fromEnvironment(
     'DISCOVER_API_BASE_URL',
-    defaultValue: 'http://127.0.0.1:8000',
+    defaultValue: ApiConfig.baseUrl,
   );
   final http.Client _client;
 
