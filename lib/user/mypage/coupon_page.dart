@@ -4,7 +4,7 @@ import 'package:get/get.dart';
 import 'package:bootcamp_teamproject_1/discover/product_list_page.dart';
 
 import 'mypage_common.dart';
-import 'mypage_sample_data.dart';
+import 'mypage_models.dart';
 
 class CouponPage extends StatelessWidget {
   final List<MpCoupon> coupons;
