@@ -15,6 +15,7 @@ from .dependencies import get_local
 from . import app_settings
 from .discover.router import router as discover_router
 from .user.main import router as user_router
+from .headquarters import routers as headquarters_routers
 
 
 @asynccontextmanager
@@ -37,6 +38,8 @@ for module in (login, signup, review_write, review_management, notifications, ap
 # 최신 main의 상품/마이페이지 API도 같은 서버에 등록한다.
 app.include_router(discover_router)
 app.include_router(user_router)
+for headquarters_router in headquarters_routers:
+    app.include_router(headquarters_router)
 
 
 # 한 서버의 OpenAPI 문서에 반드시 노출되어야 하는 대표 경로다.
@@ -52,12 +55,21 @@ _SWAGGER_REQUIRED_PATHS = (
     '/api/v1/mypage/summary',
     '/api/v1/test/status',
     '/api/v1/test/firebase',
+    '/api/v1/headquarters/orders',
+    '/api/v1/headquarters/inventory',
+    '/api/v1/headquarters/approvals',
+    '/api/v1/headquarters/sales/summary',
+    '/api/v1/headquarters/branches',
+    '/api/v1/headquarters/contracts',
+    '/api/v1/headquarters/members',
+    '/api/v1/headquarters/reviews',
+    '/api/v1/headquarters/inquiries',
 )
 
 
 def swagger_route_status():
     """Return the route-registration result used by `/test` and smoke tests."""
-    registered_paths = {route.path for route in app.routes if hasattr(route, 'path')}
+    registered_paths = set(app.openapi()['paths'])
     missing_paths = [path for path in _SWAGGER_REQUIRED_PATHS if path not in registered_paths]
     return {
         'ok': not missing_paths,

@@ -14,6 +14,7 @@
 | 고객센터 | `customer_support.py` | MySQL `contact`, FAQ는 기존 화면의 안내 문구 |
 | 로그인 | `login.py` | Firebase `account` → 서버 SQLite `api_sessions` |
 | 회원가입 | `signup.py` | Firebase `account` 생성 → MySQL `customer` 연결 |
+| 본사 관리자 | `headquarters/` | 주문·재고·결재·매출·대리점·계약 (기능별 API 및 제약은 [안내](headquarters/README.md)) |
 
 공통 연결 키는 **이메일**이다: `account.email = customer.customer_id =
 review.customer_customer_id = contact.customer_customer_id`.

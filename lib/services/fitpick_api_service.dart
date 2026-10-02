@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'api_config.dart';
 
 /// 페이지에서 사용할 REST 어댑터. --dart-define=API_BASE_URL=...로 서버 지정.
 /// 토큰은 메모리에만 보관하므로 앱 재시작 후 다시 로그인한다.
@@ -9,10 +10,7 @@ class FitpickApiService {
   static final instance = FitpickApiService();
   final http.Client _client;
   // 실제 서버 주소는 --dart-define=API_BASE_URL=...로 빌드할 때 변경할 수 있다.
-  static const baseUrl = String.fromEnvironment(
-    'API_BASE_URL',
-    defaultValue: 'http://192.168.20.53:8000',
-  );
+  static const baseUrl = ApiConfig.baseUrl;
   String? _token;
   bool get hasSession => _token != null;
 
