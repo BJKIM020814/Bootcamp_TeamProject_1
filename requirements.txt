@@ -1,5 +1,8 @@
-fastapi
-uvicorn
-pymysql
+fastapi>=0.115,<1
+uvicorn>=0.30,<1
+pymysql>=1.1,<2
 cryptography
-python-dotenv
+python-dotenv>=1,<2
+google-cloud-firestore>=2.19,<3
+pwdlib[argon2]>=0.2,<1
+email-validator>=2,<3

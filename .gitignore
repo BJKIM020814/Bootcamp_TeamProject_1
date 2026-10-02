@@ -398,3 +398,9 @@ $RECYCLE.BIN/
 python/.env
 !.env.example
 !python/.env.example
+
+# FastAPI server state and private Google credentials
+fastapid/data/
+**/service-account*.json
+
+python/fastapi/data/

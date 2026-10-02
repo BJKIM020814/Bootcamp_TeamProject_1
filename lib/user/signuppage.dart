@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 
-import '../models/erd_entities.dart';
+import '../services/fitpick_api_service.dart';
+import 'loginpage.dart';
 
 /// FITPICK 회원가입 화면.
 ///
-/// 기존 ERD의 `account` 엔티티 필드만 사용한다.
+/// 기존 account 회원 필드와 약관 동의를 서버에 전달하고 가입 성공 후 로그인 화면으로 이동한다.
 class SignUpPage extends StatefulWidget {
-  const SignUpPage({super.key});
+  const SignUpPage({super.key, this.api, this.returnToLogin = false});
+  // 테스트에서는 가짜 HTTP 서비스를 주입하고, 실제 앱에서는 공통 서비스를 사용한다.
+  final FitpickApiService? api;
+  // 로그인에서 열린 가입 화면인지 표시해 성공 시 기존 로그인 화면으로 복귀한다.
+  final bool returnToLogin;
 
   @override
   State<SignUpPage> createState() => _SignUpPageState();
@@ -23,6 +28,8 @@ class _SignUpPageState extends State<SignUpPage> {
   String _gender = '선택 안 함';
   bool _agreed = false;
   bool _obscurePassword = true;
+  bool _isLoading = false;
+  FitpickApiService get _api => widget.api ?? FitpickApiService.instance;
 
   @override
   void dispose() {
@@ -34,36 +41,72 @@ class _SignUpPageState extends State<SignUpPage> {
     super.dispose();
   }
 
-  void _submit() {
-    final isFormValid = _formKey.currentState?.validate() ?? false;
-    if (!isFormValid) return;
-
+  // 입력 검증 → 서버 가입 요청 → 성공 안내 → 로그인 화면 이동 순서로 처리한다.
+  Future<void> _submit() async {
+    // 요청 중 재클릭/키보드 제출로 동일 가입 요청이 반복되는 것을 막는다.
+    if (_isLoading || !(_formKey.currentState?.validate() ?? false)) return;
     if (!_agreed) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('약관에 동의해 주세요.')));
+      _showMessage('약관에 동의해 주세요.');
       return;
     }
-
-    // 프로젝트의 기존 회원(account) 모델과 동일한 필드명으로만 구성한다.
-    final account = ErpEntity('account', _emailController.text.trim(), {
-      'email': _emailController.text.trim(),
-      'password': _passwordController.text,
-      'phoneNumber': _phoneNumberController.text.trim(),
-      'name': _nameController.text.trim(),
-      'gender': _gender,
-      'address': _addressController.text.trim(),
-      'signupPath': '이메일',
-    });
-
     FocusScope.of(context).unfocus();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${account.fields['name']}님의 회원가입 정보를 확인했습니다.')),
-    );
+    setState(() => _isLoading = true);
+    final email = _emailController.text.trim();
+    try {
+      // agreed는 서버의 필수 검증 항목이다. startSession:false로 자동 로그인은 하지 않는다.
+      final result = await _api.signup({
+        'email': email,
+        'password': _passwordController.text,
+        'phoneNumber': _phoneNumberController.text.trim(),
+        'name': _nameController.text.trim(),
+        'gender': _gender,
+        'address': _addressController.text.trim(),
+        'signupPath': '이메일',
+        'agreed': _agreed,
+      }, startSession: false);
+      // 응답을 기다리는 동안 화면이 닫혔다면 UI와 Navigator를 사용하지 않는다.
+      if (!mounted) return;
+      _showMessage(
+        result['customerSynced'] == false
+            ? '회원가입이 완료되었습니다. 쇼핑 정보 연결은 잠시 후 재시도가 필요합니다. 로그인해 주세요.'
+            : '회원가입이 완료되었습니다. 로그인해 주세요.',
+      );
+      // 기존 로그인 화면이 있으면 가입 이메일을 결과로 돌려주고, 없으면 로그인 화면으로 교체한다.
+      if (widget.returnToLogin && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop(email);
+      } else {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute<void>(
+            builder: (_) => LoginPage(initialEmail: email, api: _api),
+          ),
+        );
+      }
+      // 서버가 가입 실패를 알려주면 화면을 유지하고 사용자가 수정/재시도할 수 있게 한다.
+    } on FitpickApiException catch (error) {
+      if (mounted) _showMessage(error.message);
+    } catch (_) {
+      if (mounted) _showMessage('회원가입 서버에 연결할 수 없습니다. 서버 주소와 실행 상태를 확인해 주세요.');
+      // 성공/실패 여부와 무관하게 살아 있는 화면의 로딩 상태를 해제한다.
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _goBack() {
-    if (Navigator.of(context).canPop()) Navigator.of(context).pop();
+    if (_isLoading) return;
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    } else {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute<void>(builder: (_) => LoginPage(api: _api)),
+      );
+    }
   }
 
   @override
@@ -219,17 +262,26 @@ class _SignUpPageState extends State<SignUpPage> {
               SizedBox(
                 height: 52,
                 child: FilledButton(
-                  onPressed: _submit,
+                  onPressed: _isLoading ? null : _submit,
                   style: FilledButton.styleFrom(
                     backgroundColor: _brandColor,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
                   ),
-                  child: const Text(
-                    '회원가입',
-                    style: TextStyle(fontWeight: FontWeight.w700),
-                  ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text(
+                          '회원가입',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
                 ),
               ),
               const SizedBox(height: 12),

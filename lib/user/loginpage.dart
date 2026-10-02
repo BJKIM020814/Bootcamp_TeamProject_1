@@ -1,17 +1,19 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../discover/home_page.dart';
-import '../models/erd_entities.dart';
+import '../services/fitpick_api_service.dart';
 import 'authController.dart';
 import 'signuppage.dart';
 
 /// FITPICK 로그인 화면.
 ///
-/// 기존 ERD의 `account` 컬렉션에서 이메일(email)과 비밀번호(password)를
-/// 사용한다. Firebase Authentication 모델이나 별도 회원 모델은 만들지 않는다.
+/// FastAPI에서 Firebase account 비밀번호를 검증하고 서버 세션을 발급한다.
 class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
+  const LoginPage({super.key, this.initialEmail = '', this.api});
+  // 가입 완료 후 이동한 경우 이메일을 미리 채우고 비밀번호는 새로 입력받는다.
+  final String initialEmail;
+  // 테스트에서 HTTP 서비스를 교체할 수 있도록 의존성을 선택적으로 받는다.
+  final FitpickApiService? api;
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -25,6 +27,13 @@ class _LoginPageState extends State<LoginPage> {
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _isLoading = false;
+  FitpickApiService get _api => widget.api ?? FitpickApiService.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    _emailController.text = widget.initialEmail;
+  }
 
   @override
   void dispose() {
@@ -33,36 +42,25 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
+  // Firestore 비밀번호를 앱에서 직접 비교하지 않고 서버의 해시 검증 결과를 사용한다.
   Future<void> _login() async {
-    if (!(_formKey.currentState?.validate() ?? false)) return;
+    if (_isLoading || !(_formKey.currentState?.validate() ?? false)) return;
 
     FocusScope.of(context).unfocus();
     setState(() => _isLoading = true);
 
     try {
-      final email = _emailController.text.trim();
-      final result = await FirebaseFirestore.instance
-          .collection('account')
-          .where('email', isEqualTo: email)
-          .limit(1)
-          .get();
-
+      final result = await _api.login(
+        _emailController.text.trim(),
+        _passwordController.text,
+      );
+      // 비동기 요청 중 화면이 닫히면 화면 이동이나 메시지 표시를 하지 않는다.
       if (!mounted) return;
-      if (result.docs.isEmpty) {
-        _showMessage('등록되지 않은 이메일입니다.');
-        return;
-      }
-
-      // 기존 범용 ERD 모델로 Firestore 문서를 읽는다.
-      final account = ErpEntity.fromFirestore('account', result.docs.first);
-      if (account.fields['password'] != _passwordController.text) {
-        _showMessage('비밀번호가 일치하지 않습니다.');
-        return;
-      }
-
-      _onLoginSuccess('${account.fields['name']}');
-    } on FirebaseException {
-      if (mounted) _showMessage('로그인 정보를 확인할 수 없습니다. 다시 시도해 주세요.');
+      _onLoginSuccess('${(result['account'] as Map)['name']}');
+    } on FitpickApiException catch (error) {
+      if (mounted) _showMessage(error.message);
+    } catch (_) {
+      if (mounted) _showMessage('로그인 서버에 연결할 수 없습니다. 서버 주소와 실행 상태를 확인해 주세요.');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -74,6 +72,7 @@ class _LoginPageState extends State<LoginPage> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  // 서버 인증에 성공한 다음에만 기존 앱의 로그인 UI 상태를 변경한다.
   void _onLoginSuccess(String name) {
     AuthController.to.login();
     _showMessage('$name님, 환영합니다.');
@@ -86,10 +85,17 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-  void _goToSignUp() {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute<void>(builder: (_) => const SignUpPage()));
+  // 회원가입 화면의 pop(email) 결과를 받아 기존 로그인 입력칸에 반영한다.
+  Future<void> _goToSignUp() async {
+    final email = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => SignUpPage(api: _api, returnToLogin: true),
+      ),
+    );
+    if (!mounted || email == null) return;
+    _emailController.text = email;
+    // 기존에 입력했던 비밀번호는 남기지 않아 새 계정으로 다시 로그인하게 한다.
+    _passwordController.clear();
   }
 
   void _goBack() {
