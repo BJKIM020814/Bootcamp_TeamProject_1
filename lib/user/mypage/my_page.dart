@@ -10,7 +10,7 @@ import 'package:bootcamp_teamproject_1/user/authController.dart';
 import 'package:bootcamp_teamproject_1/user/loginpage.dart';
 import 'package:bootcamp_teamproject_1/user/mypage/coupon_page.dart';
 import 'package:bootcamp_teamproject_1/user/mypage/customersupportpage.dart';
-import 'package:bootcamp_teamproject_1/user/mypage/mypage_sample_data.dart';
+import 'package:bootcamp_teamproject_1/user/mypage/mypage_controller.dart';
 import 'package:bootcamp_teamproject_1/user/mypage/profile_page.dart';
 import 'package:bootcamp_teamproject_1/user/mypage/recently_viewed_page.dart';
 import 'package:bootcamp_teamproject_1/user/mypage/reviewmanagementpage.dart';
@@ -33,15 +33,23 @@ class _MyPageState extends State<MyPage> {
 
   final int _tabIndex = 4;
 
+  final MyPageController _c = MyPageController.to;
+
+  @override
+  void initState() {
+    super.initState();
+    _c.load();
+  }
+
+  /// 내 정보 화면에서 돌아오면 바뀐 이름/사이즈를 다시 불러온다.
+  void _openProfile() =>
+      Get.to(() => ProfilePage(profile: _c.profile))?.then((_) => _c.load());
+
   final List<_MenuItem> _menus = const [
     _MenuItem(Icons.receipt_long_outlined, '주문 · 수령 내역'),
     _MenuItem(Icons.favorite_border, '찜한 상품'),
     _MenuItem(Icons.person_outline, '내 정보'),
-    _MenuItem(
-      Icons.location_on_outlined,
-      '자주 찾는 매장',
-      trailing: sampleFavoriteStoreName,
-    ),
+    _MenuItem(Icons.location_on_outlined, '자주 찾는 매장'),
     _MenuItem(Icons.snowshoeing_outlined, '리뷰 관리'),
     _MenuItem(Icons.history, '최근 본 상품'),
     _MenuItem(Icons.confirmation_number_outlined, '쿠폰함'),
@@ -95,73 +103,75 @@ class _MyPageState extends State<MyPage> {
   }
 
   Widget _buildProfile() {
-    return Row(
-      children: [
-        const CircleAvatar(
-          radius: 50,
-          backgroundColor: Color(0xFFEDEFF1),
-          child: Icon(Icons.person, size: 56, color: Color(0xFFB5BDC4)),
-        ),
-        const SizedBox(width: 20),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Text(
-                    '${sampleProfile.name}님',
-                    style: const TextStyle(
-                      fontSize: 26,
-                      fontWeight: FontWeight.bold,
-                      color: _ink,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE0EEE9),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Text(
-                      sampleProfile.grade,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: _green,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                '좋은 신발과 함께하는 하루.',
-                style: TextStyle(fontSize: 13, color: _sub),
-              ),
-              const SizedBox(height: 8),
-              InkWell(
-                onTap: () => Get.to(() => ProfilePage(profile: sampleProfile)),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
+    return Obx(
+      () => Row(
+        children: [
+          const CircleAvatar(
+            radius: 50,
+            backgroundColor: Color(0xFFEDEFF1),
+            child: Icon(Icons.person, size: 56, color: Color(0xFFB5BDC4)),
+          ),
+          const SizedBox(width: 20),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
                     Text(
-                      '내 정보 수정',
-                      style: TextStyle(fontSize: 12, color: _sub),
+                      _c.name.value.isEmpty ? '회원님' : '${_c.name.value}님',
+                      style: const TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
+                        color: _ink,
+                      ),
                     ),
-                    SizedBox(width: 6),
-                    Icon(Icons.north_east, size: 13, color: _sub),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE0EEE9),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Text(
+                        _c.grade.value,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: _green,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
-              ),
-            ],
+                const SizedBox(height: 6),
+                const Text(
+                  '좋은 신발과 함께하는 하루.',
+                  style: TextStyle(fontSize: 13, color: _sub),
+                ),
+                const SizedBox(height: 8),
+                InkWell(
+                  onTap: _openProfile,
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '내 정보 수정',
+                        style: TextStyle(fontSize: 12, color: _sub),
+                      ),
+                      SizedBox(width: 6),
+                      Icon(Icons.north_east, size: 13, color: _sub),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -173,14 +183,16 @@ class _MyPageState extends State<MyPage> {
         borderRadius: BorderRadius.circular(14),
       ),
       child: IntrinsicHeight(
-        child: Row(
-          children: [
-            _statItem('$sampleOrderCount', '주문 내역'),
-            const VerticalDivider(width: 1, color: Color(0xFFE3E7EA)),
-            _statItem('${sampleWishlist().length}', '찜한 상품'),
-            const VerticalDivider(width: 1, color: Color(0xFFE3E7EA)),
-            _statItem('$sampleReviewCount', '작성한 리뷰'),
-          ],
+        child: Obx(
+          () => Row(
+            children: [
+              _statItem('${_c.orderCount.value}', '주문 내역'),
+              const VerticalDivider(width: 1, color: Color(0xFFE3E7EA)),
+              _statItem('${_c.wishlistCount.value}', '찜한 상품'),
+              const VerticalDivider(width: 1, color: Color(0xFFE3E7EA)),
+              _statItem('${_c.reviewCount.value}', '작성한 리뷰'),
+            ],
+          ),
         ),
       ),
     );
@@ -257,12 +269,14 @@ class _MyPageState extends State<MyPage> {
                   crossAxisAlignment: CrossAxisAlignment.baseline,
                   textBaseline: TextBaseline.alphabetic,
                   children: [
-                    Text(
-                      sampleProfile.shoeSize.replaceAll('mm', ''),
-                      style: const TextStyle(
-                        fontSize: 52,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                    Obx(
+                      () => Text(
+                        _c.shoeSize.value.replaceAll('mm', ''),
+                        style: const TextStyle(
+                          fontSize: 52,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
                     SizedBox(width: 4),
@@ -274,8 +288,7 @@ class _MyPageState extends State<MyPage> {
                 ),
                 const SizedBox(height: 14),
                 InkWell(
-                  onTap: () =>
-                      Get.to(() => ProfilePage(profile: sampleProfile)),
+                  onTap: _openProfile,
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -303,23 +316,23 @@ class _MyPageState extends State<MyPage> {
     );
   }
 
-  /// 선택한 메뉴에 맞는 화면으로 이동합니다. 데이터는 시연용 sample API를 전달합니다.
+  /// 선택한 메뉴에 맞는 화면으로 이동합니다. 각 화면이 서버에서 직접 데이터를 불러옵니다.
   void _openMenu(_MenuItem item) {
     switch (item.title) {
       case '주문 · 수령 내역':
         Get.to(() => const Orderhistorypage());
       case '찜한 상품':
-        Get.to(() => WishlistPage(products: sampleWishlist()));
+        Get.to(() => const WishlistPage())?.then((_) => _c.load());
       case '내 정보':
-        Get.to(() => ProfilePage(profile: sampleProfile));
+        _openProfile();
       case '자주 찾는 매장':
         Get.to(() => const StoreSelectionPage());
       case '리뷰 관리':
         Get.to(() => const ReviewManagementPage());
       case '최근 본 상품':
-        Get.to(() => RecentlyViewedPage(products: sampleRecentlyViewed()));
+        Get.to(() => const RecentlyViewedPage());
       case '쿠폰함':
-        Get.to(() => CouponPage(coupons: sampleCoupons));
+        Get.to(() => const CouponPage());
       case '고객센터':
         Get.to(() => const CustomerSupportPage());
       case '앱 설정':
@@ -345,12 +358,14 @@ class _MyPageState extends State<MyPage> {
                 style: const TextStyle(fontSize: 16, color: _ink),
               ),
             ),
-            if (item.trailing != null)
-              Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: Text(
-                  item.trailing!,
-                  style: const TextStyle(fontSize: 12, color: _sub),
+            if (item.title == '자주 찾는 매장')
+              Obx(
+                () => Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: Text(
+                    _c.favoriteStore.value,
+                    style: const TextStyle(fontSize: 12, color: _sub),
+                  ),
                 ),
               ),
             const Icon(Icons.chevron_right, color: Color(0xFFB5BDC4)),
@@ -457,7 +472,6 @@ class _MyPageState extends State<MyPage> {
 class _MenuItem {
   final IconData icon;
   final String title;
-  final String? trailing;
 
-  const _MenuItem(this.icon, this.title, {this.trailing});
+  const _MenuItem(this.icon, this.title);
 }

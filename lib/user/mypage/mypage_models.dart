@@ -15,6 +15,15 @@ class MpCoupon {
     required this.badge,
     this.available = false,
   });
+
+  factory MpCoupon.fromJson(Map<String, dynamic> json) => MpCoupon(
+    name: json['name'] as String,
+    discount: json['discount'] as String,
+    desc: json['desc'] as String,
+    period: json['period'] as String,
+    badge: json['badge'] as String,
+    available: json['available'] as bool,
+  );
 }
 
 class MpProfile {
@@ -31,4 +40,32 @@ class MpProfile {
     required this.shoeSize,
     required this.grade,
   });
+}
+
+/// GET /mypage/summary 응답 (마이페이지 첫 화면).
+class MpSummary {
+  final int shoeSize;
+  final String grade;
+  final String? favoriteStore;
+  final int orderCount;
+  final int wishlistCount;
+  final int reviewCount;
+
+  const MpSummary({
+    required this.shoeSize,
+    required this.grade,
+    required this.favoriteStore,
+    required this.orderCount,
+    required this.wishlistCount,
+    required this.reviewCount,
+  });
+
+  factory MpSummary.fromJson(Map<String, dynamic> json) => MpSummary(
+    shoeSize: json['shoe_size'] as int,
+    grade: json['grade'] as String,
+    favoriteStore: json['favorite_store'] as String?,
+    orderCount: json['order_count'] as int,
+    wishlistCount: json['wishlist_count'] as int,
+    reviewCount: json['review_count'] as int,
+  );
 }

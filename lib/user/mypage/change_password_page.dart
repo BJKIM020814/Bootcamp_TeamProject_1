@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 
+import 'package:get/get.dart';
+
+import 'package:bootcamp_teamproject_1/services/account_service.dart';
+import 'package:bootcamp_teamproject_1/user/authController.dart';
+
 import 'mypage_common.dart';
 
 class ChangePasswordPage extends StatefulWidget {
@@ -22,8 +27,15 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
     super.dispose();
   }
 
-  /// 시연용 입력 검증 (서버 전송/저장 없음)
-  void _validate() {
+  bool _saving = false;
+
+  void _toast(String message) => ScaffoldMessenger.of(
+    context,
+  ).showSnackBar(SnackBar(content: Text(message)));
+
+  /// 입력을 검증한 뒤 계정(Firebase account)의 비밀번호를 변경한다.
+  Future<void> _submit() async {
+    if (_saving) return;
     final pw = _next.text;
     String? error;
     if (_current.text.isEmpty) {
@@ -35,9 +47,28 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
     } else if (pw != _confirm.text) {
       error = '새 비밀번호 확인이 일치하지 않습니다.';
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(error ?? '입력 형식이 올바릅니다. (시연용 · 실제 변경되지 않음)')),
-    );
+    if (error == null && _next.text == _current.text) {
+      error = '새 비밀번호는 현재 비밀번호와 달라야 합니다.';
+    }
+    final email = AuthController.to.customerId.value;
+    if (error == null && email == null) error = '로그인이 필요합니다.';
+    if (error != null) return _toast(error);
+
+    setState(() => _saving = true);
+    try {
+      await AccountService.changePassword(
+        email!,
+        current: _current.text,
+        next: _next.text,
+      );
+      if (!mounted) return;
+      _toast('비밀번호가 변경되었습니다.');
+      Get.back();
+    } catch (e) {
+      if (mounted) _toast('$e');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   Widget _field(String label, TextEditingController c, {String? hint}) {
@@ -75,23 +106,20 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
             ),
           ),
           const SizedBox(height: 16),
-          const MpNotice(
-            '인증 서버가 연결되지 않은 목업입니다. 실제 사용 중인 비밀번호를 입력하지 마세요.',
-            background: Color(0xFFFFF4E0),
-            textColor: Color(0xFF9A5B13),
-          ),
           const SizedBox(height: 28),
-          _field('현재 비밀번호 (시연)', _current),
+          _field('현재 비밀번호', _current),
           _field('새 비밀번호', _next, hint: '영문·숫자 포함 8자 이상'),
           _field('새 비밀번호 확인', _confirm),
           const Text(
-            '입력값은 전송·저장하지 않으며 화면을 나가면 폐기됩니다.',
+            '현재 비밀번호가 일치할 때만 변경됩니다.',
             style: TextStyle(fontSize: 13, color: MpColors.icon),
           ),
         ],
       ),
-      bottomNavigationBar:
-          MpBottomBar(actionLabel: '비밀번호 입력 검증', onAction: _validate),
+      bottomNavigationBar: MpBottomBar(
+        actionLabel: _saving ? '변경 중...' : '비밀번호 변경',
+        onAction: _submit,
+      ),
     );
   }
 }

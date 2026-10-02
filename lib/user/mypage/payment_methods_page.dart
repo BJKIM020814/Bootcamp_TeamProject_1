@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import 'package:bootcamp_teamproject_1/services/mypage_api.dart';
+import 'package:bootcamp_teamproject_1/user/authController.dart';
+
 import 'mypage_common.dart';
 
 class PaymentMethodsPage extends StatefulWidget {
@@ -13,6 +16,46 @@ class PaymentMethodsPage extends StatefulWidget {
 
 class _PaymentMethodsPageState extends State<PaymentMethodsPage> {
   int _selected = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSelected();
+  }
+
+  String? get _customerId => AuthController.to.customerId.value;
+
+  void _toast(String message) => ScaffoldMessenger.of(
+    context,
+  ).showSnackBar(SnackBar(content: Text(message)));
+
+  /// 서버에 저장된 기본 결제수단을 선택 상태로 반영한다.
+  Future<void> _loadSelected() async {
+    final id = _customerId;
+    if (id == null) return;
+    try {
+      final saved = (await MyPageApi.payment(id)).selected;
+      final index = widget.methods.indexOf(saved);
+      if (mounted && index >= 0) setState(() => _selected = index);
+    } catch (e) {
+      if (mounted) _toast('$e');
+    }
+  }
+
+  /// 먼저 화면을 바꾸고 서버에 저장한다. 실패하면 이전 선택으로 되돌린다.
+  Future<void> _select(int index) async {
+    final id = _customerId;
+    if (id == null) return _toast('로그인이 필요합니다.');
+    final previous = _selected;
+    setState(() => _selected = index);
+    try {
+      await MyPageApi.setPayment(id, widget.methods[index]);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _selected = previous);
+      _toast('$e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -64,25 +107,31 @@ class _PaymentMethodsPageState extends State<PaymentMethodsPage> {
   Widget _buildMethod(int index) {
     final bool on = _selected == index;
     return InkWell(
-      onTap: () => setState(() => _selected = index),
+      onTap: () => _select(index),
       child: SizedBox(
         height: 96,
         child: Row(
           children: [
-            const Icon(Icons.credit_card_outlined,
-                size: 28, color: MpColors.ink),
+            const Icon(
+              Icons.credit_card_outlined,
+              size: 28,
+              color: MpColors.ink,
+            ),
             const SizedBox(width: 18),
             Expanded(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(widget.methods[index],
-                      style: const TextStyle(
-                          fontSize: 16, color: MpColors.ink)),
+                  Text(
+                    widget.methods[index],
+                    style: const TextStyle(fontSize: 16, color: MpColors.ink),
+                  ),
                   const SizedBox(height: 6),
-                  const Text('실제 결제정보 미등록',
-                      style: TextStyle(fontSize: 11, color: MpColors.sub)),
+                  const Text(
+                    '실제 결제정보 미등록',
+                    style: TextStyle(fontSize: 11, color: MpColors.sub),
+                  ),
                 ],
               ),
             ),

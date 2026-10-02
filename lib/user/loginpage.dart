@@ -60,7 +60,7 @@ class _LoginPageState extends State<LoginPage> {
         return;
       }
 
-      _onLoginSuccess('${account.fields['name']}');
+      _onLoginSuccess('${account.fields['name']}', email);
     } on FirebaseException {
       if (mounted) _showMessage('로그인 정보를 확인할 수 없습니다. 다시 시도해 주세요.');
     } finally {
@@ -74,8 +74,8 @@ class _LoginPageState extends State<LoginPage> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
-  void _onLoginSuccess(String name) {
-    AuthController.to.login();
+  void _onLoginSuccess(String name, String email) {
+    AuthController.to.login(email: email);
     _showMessage('$name님, 환영합니다.');
     if (Navigator.of(context).canPop()) {
       Navigator.of(context).pop();

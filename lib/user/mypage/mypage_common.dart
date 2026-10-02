@@ -50,7 +50,9 @@ PreferredSizeWidget mpAppBar(String title) {
 
 // 로그인하지 않은 상태라면 로그인 화면으로, 로그인된 상태라면 요청한 화면으로 이동합니다.
 void _goToMpIfLoggedIn(Widget Function() builder) {
-  Get.to(AuthController.to.isLoggedIn.value ? builder : () => const LoginPage());
+  Get.to(
+    AuthController.to.isLoggedIn.value ? builder : () => const LoginPage(),
+  );
 }
 
 void _goToMpTab(int index) {
@@ -104,7 +106,9 @@ class MpBottomBar extends StatelessWidget {
                   child: Text(
                     actionLabel!,
                     style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.bold),
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ),
@@ -135,11 +139,21 @@ class MpTabBar extends StatelessWidget {
             children: const [
               _Tab(Icons.home_outlined, Icons.home, '홈', false, 0),
               _Tab(Icons.grid_view_outlined, Icons.grid_view, '카테고리', false, 1),
-              _Tab(Icons.shopping_bag_outlined, Icons.shopping_bag, '장바구니',
-                  false, 2,
-                  badge: 1),
-              _Tab(Icons.receipt_long_outlined, Icons.receipt_long, '주문내역',
-                  false, 3),
+              _Tab(
+                Icons.shopping_bag_outlined,
+                Icons.shopping_bag,
+                '장바구니',
+                false,
+                2,
+                badge: 1,
+              ),
+              _Tab(
+                Icons.receipt_long_outlined,
+                Icons.receipt_long,
+                '주문내역',
+                false,
+                3,
+              ),
               _Tab(Icons.person_outline, Icons.person, '마이', true, 4),
             ],
           ),
@@ -157,8 +171,14 @@ class _Tab extends StatelessWidget {
   final int index;
   final int badge;
 
-  const _Tab(this.icon, this.activeIcon, this.label, this.selected, this.index,
-      {this.badge = 0});
+  const _Tab(
+    this.icon,
+    this.activeIcon,
+    this.label,
+    this.selected,
+    this.index, {
+    this.badge = 0,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -194,9 +214,9 @@ class _Tab extends StatelessWidget {
 /// 입력창 공통 데코레이션
 InputDecoration mpInputDecoration({String? hint}) {
   OutlineInputBorder border(Color c) => OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: c),
-      );
+    borderRadius: BorderRadius.circular(12),
+    borderSide: BorderSide(color: c),
+  );
   return InputDecoration(
     hintText: hint,
     hintStyle: const TextStyle(color: Color(0xFFB5BDC4), fontSize: 15),

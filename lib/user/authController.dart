@@ -10,9 +10,18 @@ class AuthController extends GetxController {
 
   final RxBool isLoggedIn = false.obs;
 
-  void login() => isLoggedIn.value = true;
+  /// 로그인한 계정의 email. 서버(MySQL)에서는 이 값이 customer_id 이다.
+  final RxnString customerId = RxnString();
 
-  void logout() => isLoggedIn.value = false;
+  void login({String? email}) {
+    isLoggedIn.value = true;
+    customerId.value = email;
+  }
+
+  void logout() {
+    isLoggedIn.value = false;
+    customerId.value = null;
+  }
 }
 
 /// 장바구니 아이콘 + 담긴 수량 배지.
