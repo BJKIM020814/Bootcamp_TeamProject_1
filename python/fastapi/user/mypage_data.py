@@ -7,7 +7,7 @@ MySQL 쪽은 누적결제금액(등급), 신발 사이즈, 기본 결제수단, 
 import re
 from datetime import datetime, timedelta
 
-import db
+from python import db
 
 PAYMENT_METHODS = ["신용 / 체크카드", "카카오페이", "네이버페이"]
 SHOE_SIZES = range(220, 311, 5)

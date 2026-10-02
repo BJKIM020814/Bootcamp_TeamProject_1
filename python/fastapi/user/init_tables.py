@@ -3,10 +3,8 @@
 CREATE TABLE IF NOT EXISTS / INSERT IGNORE 라서 여러 번 실행해도 안전하다. 기존 테이블은 건드리지 않는다.
 """
 import os
-import sys
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-import db  # noqa: E402
+from python import db
 
 
 def main():
