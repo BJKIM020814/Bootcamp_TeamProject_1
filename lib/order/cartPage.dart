@@ -1,6 +1,7 @@
 import 'package:bootcamp_teamproject_1/discover/home_page.dart';
 import 'package:bootcamp_teamproject_1/order/cartController.dart';
 import 'package:bootcamp_teamproject_1/order/checkoutPage.dart';
+import 'package:bootcamp_teamproject_1/order/orderApi.dart';
 import 'package:bootcamp_teamproject_1/order/storePickerStub.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -18,28 +19,29 @@ class _CartpageState extends State<Cartpage> {
   @override
   void initState() {
     super.initState();
-    // TODO: 상품 상세 페이지에 실제 "담기" 기능이 연결되면 이 시드 호출을 제거한다.
-    cartController.seedSampleData();
+    cartController.load();
   }
 
-  String _formatWon(int value) {
-    final digits = value.toString();
-    final buffer = StringBuffer();
-    for (var i = 0; i < digits.length; i++) {
-      final remaining = digits.length - i;
-      if (i > 0 && remaining % 3 == 0) buffer.write(',');
-      buffer.write(digits[i]);
-    }
-    return '₩$buffer';
+  String _formatWon(int value) => formatWon(value);
+
+  /// 서버 요청 결과가 실패면 이유를 스낵바로 보여준다.
+  Future<void> _act(Future<bool> request) async {
+    if (await request || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(cartController.errorMessage.value ?? '요청을 처리하지 못했습니다.'),
+      ),
+    );
   }
 
   Future<void> _goBrowseShoes() async {
     Get.to(() => const HomePage());
   }
 
-  void _checkout() {
+  Future<void> _checkout() async {
     if (cartController.selectedCount == 0) return;
-    Get.to(() => const Checkoutpage());
+    await Get.to(() => const Checkoutpage());
+    cartController.load();
   }
 
   @override
@@ -48,9 +50,35 @@ class _CartpageState extends State<Cartpage> {
       appBar: AppBar(title: Text('장바구니'), centerTitle: true),
       body: SafeArea(
         child: Obx(() {
+          final error = cartController.errorMessage.value;
+          if (cartController.isEmpty && cartController.isLoading.value) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (cartController.isEmpty && error != null) {
+            return _buildErrorState(error);
+          }
           if (cartController.isEmpty) return _buildEmptyState(context);
           return _buildCartList(context);
         }),
+      ),
+    );
+  }
+
+  Widget _buildErrorState(String message) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(message, textAlign: TextAlign.center),
+            const SizedBox(height: 12),
+            OutlinedButton(
+              onPressed: cartController.load,
+              child: const Text('다시 시도'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -119,12 +147,12 @@ class _CartpageState extends State<Cartpage> {
               Checkbox(
                 value: cartController.isAllSelected,
                 onChanged: (value) =>
-                    cartController.toggleSelectAll(value ?? false),
+                    _act(cartController.toggleSelectAll(value ?? false)),
               ),
               Text('전체 선택 (${items.length})'),
               const Spacer(),
               TextButton(
-                onPressed: cartController.removeSelected,
+                onPressed: () => _act(cartController.removeSelected()),
                 child: const Text(
                   '선택 삭제',
                   style: TextStyle(color: Colors.grey),
@@ -144,7 +172,7 @@ class _CartpageState extends State<Cartpage> {
               _buildStoreCard(),
               const SizedBox(height: 12),
               Text(
-                '인터랙티브 목업 · 신규 상품은 실제 가격 참고, 기존 상품과 색상별 품번 · 본사 방침 · 주문은 시연 데이터입니다.',
+                '상품은 본사에서 선택한 수령 매장으로 발송됩니다. 결제는 모의 결제로 처리됩니다.',
                 style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
               ),
               const SizedBox(height: 16),
@@ -163,16 +191,24 @@ class _CartpageState extends State<Cartpage> {
         children: [
           Checkbox(
             value: item.selected.value,
-            onChanged: (_) => cartController.toggleItem(item.id),
+            onChanged: (_) => _act(cartController.toggleItem(item.id)),
           ),
           Container(
             width: 64,
             height: 64,
+            clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
               color: Colors.grey.shade200,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(Icons.image_outlined, color: Colors.grey),
+            child: item.imageUrl == null
+                ? const Icon(Icons.image_outlined, color: Colors.grey)
+                : Image.network(
+                    item.imageUrl!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) =>
+                        const Icon(Icons.image_outlined, color: Colors.grey),
+                  ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -207,7 +243,7 @@ class _CartpageState extends State<Cartpage> {
                     IconButton(
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
-                      onPressed: () => cartController.removeItem(item.id),
+                      onPressed: () => _act(cartController.removeItem(item.id)),
                       icon: const Icon(
                         Icons.delete_outline,
                         size: 20,
@@ -278,7 +314,7 @@ class _CartpageState extends State<Cartpage> {
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
             iconSize: 16,
-            onPressed: () => cartController.updateQuantity(item.id, -1),
+            onPressed: () => _act(cartController.updateQuantity(item.id, -1)),
             icon: const Icon(Icons.remove),
           ),
           Obx(
@@ -291,7 +327,7 @@ class _CartpageState extends State<Cartpage> {
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
             iconSize: 16,
-            onPressed: () => cartController.updateQuantity(item.id, 1),
+            onPressed: () => _act(cartController.updateQuantity(item.id, 1)),
             icon: const Icon(Icons.add),
           ),
         ],

@@ -1,5 +1,6 @@
 import 'package:bootcamp_teamproject_1/discover/home_page.dart';
 import 'package:bootcamp_teamproject_1/order/cartPage.dart';
+import 'package:bootcamp_teamproject_1/order/orderApi.dart';
 import 'package:bootcamp_teamproject_1/order/orderDetailPage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -24,16 +25,7 @@ class Ordercompletepage extends StatefulWidget {
 }
 
 class _OrdercompletepageState extends State<Ordercompletepage> {
-  String _formatWon(int value) {
-    final digits = value.toString();
-    final buffer = StringBuffer();
-    for (var i = 0; i < digits.length; i++) {
-      final remaining = digits.length - i;
-      if (i > 0 && remaining % 3 == 0) buffer.write(',');
-      buffer.write(digits[i]);
-    }
-    return '₩$buffer';
-  }
+  String _formatWon(int value) => formatWon(value);
 
   void _copyOrderNumber() {
     Clipboard.setData(ClipboardData(text: widget.orderNumber));
@@ -43,16 +35,7 @@ class _OrdercompletepageState extends State<Ordercompletepage> {
   }
 
   void _openOrderDetail() {
-    Get.to(
-      () => Orderdetailpage(
-        orderNumber: widget.orderNumber,
-        storeName: widget.storeName,
-        paymentMethod: widget.paymentMethod,
-        price: widget.paidAmount,
-        quantity: 1,
-        initialStage: PickupStage.preparing,
-      ),
-    );
+    Get.to(() => Orderdetailpage(orderNumber: widget.orderNumber));
   }
 
   void _goHome() {
@@ -98,7 +81,7 @@ class _OrdercompletepageState extends State<Ordercompletepage> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    '이 주문은 시연용입니다. 실제 결제나 예약은 발생하지 않습니다.',
+                    '모의 결제로 처리된 주문입니다. 진행 상황은 주문내역에서 확인할 수 있습니다.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 11,
