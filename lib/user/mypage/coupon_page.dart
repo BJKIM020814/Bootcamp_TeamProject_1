@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'mypage_common.dart';
-import 'mypage_sample_data.dart';
+import 'mypage_models.dart';
 
 class CouponPage extends StatelessWidget {
   final List<MpCoupon> coupons;

@@ -3,8 +3,11 @@ import 'package:get/get.dart';
 
 import 'change_password_page.dart';
 import 'mypage_common.dart';
-import 'mypage_sample_data.dart';
+import 'mypage_models.dart';
 import 'payment_methods_page.dart';
+
+// 결제수단은 DB 테이블이 없어 화면 안에서 고정값으로 사용
+const List<String> _paymentMethods = ['신용 / 체크카드', '카카오페이', '네이버페이'];
 
 class ProfilePage extends StatefulWidget {
   final MpProfile profile;
@@ -147,7 +150,7 @@ class _ProfilePageState extends State<ProfilePage> {
               _dropdown(_grade, _grades, (v) => setState(() => _grade = v))),
           _linkTile(Icons.credit_card_outlined, '결제수단 관리',
               () => Get.to(() =>
-                  const PaymentMethodsPage(methods: samplePaymentMethods)),
+                  const PaymentMethodsPage(methods: _paymentMethods)),
               trailing: '신용 / 체크카드'),
           _linkTile(Icons.lock_outline, '비밀번호 변경',
               () => Get.to(() => const ChangePasswordPage())),

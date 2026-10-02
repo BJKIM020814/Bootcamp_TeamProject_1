@@ -393,3 +393,8 @@ $RECYCLE.BIN/
 *.lnk
 
 # End of https://www.toptal.com/developers/gitignore/api/windows,macos,flutter,dart,visualstudiocode,python,android,firebase
+
+# MySQL 접속 정보(.env)는 커밋 금지, 예시 파일만 공유
+python/.env
+!.env.example
+!python/.env.example
