@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'fitpick_mypage_ui.dart';
 
 /// 12. 고객센터
-/// 문의 컬렉션이 현재 ERD에 없으므로, 자주 묻는 질문과 안내만 제공한다.
+/// FastAPI 문의 경로는 있으나 이 화면의 1:1 문의는 아직 연결되지 않은 목업이다.
 class CustomerSupportPage extends StatelessWidget {
   const CustomerSupportPage({super.key});
 

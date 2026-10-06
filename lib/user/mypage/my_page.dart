@@ -88,6 +88,18 @@ class _MyPageState extends State<MyPage> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
         children: [
+          Obx(() {
+            if (_c.loading.value) return const LinearProgressIndicator();
+            final error = _c.error.value;
+            if (error == null) return const SizedBox.shrink();
+            return ListTile(
+              title: Text(error),
+              trailing: TextButton(
+                onPressed: _c.load,
+                child: const Text('다시 시도'),
+              ),
+            );
+          }),
           _buildProfile(),
           const SizedBox(height: 28),
           _buildStats(),

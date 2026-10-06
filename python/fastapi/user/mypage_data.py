@@ -1,10 +1,12 @@
 """마이페이지(프로필/결제수단/쿠폰/찜/최근 본 상품) 데이터 접근 함수
 
-이름·전화번호·비밀번호는 Firebase account 가 관리하므로 여기서는 다루지 않는다.
-MySQL 쪽은 누적결제금액(등급), 신발 사이즈, 기본 결제수단, 찜/최근 본 상품, 쿠폰만 다룬다.
+이름·전화번호·신발 사이즈의 원본은 Firebase account, 비밀번호 검증은 Firebase Auth이다.
+MySQL 쪽은 누적결제금액(등급), 기본 결제수단, 찜/최근 본 상품, 쿠폰을 다룬다.
+기존 customer_setting.shoe_size는 호환 조회만 유지하고 고객 API에서 직접 변경하지 않는다.
 모든 쿼리는 db.py 의 파라미터 바인딩(%s)을 사용한다.
 """
 import re
+from urllib.parse import quote
 from datetime import datetime, timedelta
 
 from python import db
@@ -36,17 +38,16 @@ def grade_of(total_price):
 
 # ---------- 회원 / 설정 ----------
 def ensure_customer(customer_id):
-    """쇼핑 쪽 회원 행과 설정 행이 없으면 만든다. (가입은 Firebase 에서 하므로 첫 호출 때 생성)
-
-    customer 의 NOT NULL 컬럼은 user_data.add_customer 와 같이 빈 문자열로 채운다.
-    """
+    """조회는 기존 회원 연결만 확인한다. 빈 프로필을 임의 생성하지 않는다."""
     if not customer_id or len(customer_id) > 45 or not _EMAIL.match(customer_id):
         raise MyPageError("올바른 customer_id(이메일)가 아닙니다.", 422)
-    db.execute(
-        "INSERT IGNORE INTO customer (customer_id, password, phone, name, gender, address, "
-        "age, totalprice) VALUES (%s, '', '', '', '', '', 0, 0)",
-        (customer_id,),
-    )
+    if db.query_one('SELECT customer_id FROM customer WHERE customer_id=%s', (customer_id,)) is None:
+        raise MyPageError('쇼핑 회원정보 연결이 필요합니다. 로그인 후 동기화를 확인해 주세요.', 409)
+
+
+def ensure_settings(customer_id):
+    # 설정 저장 요청에서만 행을 생성한다. GET에는 DB 쓰기가 없어야 한다.
+    ensure_customer(customer_id)
     db.execute("INSERT IGNORE INTO customer_setting (customer_id) VALUES (%s)", (customer_id,))
 
 
@@ -55,11 +56,14 @@ def get_profile(customer_id):
     row = db.query_one(
         "SELECT s.shoe_size, s.default_payment, s.favorite_dealer_seq, d.name AS favorite_store, "
         "c.totalprice AS total_price "
-        "FROM customer_setting s JOIN customer c ON c.customer_id = s.customer_id "
+        "FROM customer c LEFT JOIN customer_setting s ON c.customer_id = s.customer_id "
         "LEFT JOIN authorized_dealer d ON d.seq = s.favorite_dealer_seq "
-        "WHERE s.customer_id = %s",
+        "WHERE c.customer_id = %s",
         (customer_id,),
     )
+    if row is None:
+        raise MyPageError('회원정보를 찾을 수 없습니다.', 404)
+    row['default_payment'] = row['default_payment'] or PAYMENT_METHODS[0]
     row["grade"] = grade_of(row["total_price"])
     return row
 
@@ -80,6 +84,7 @@ def update_profile(customer_id, shoe_size=None, favorite_dealer_seq=None):
         sets.append("favorite_dealer_seq = %s")
         params.append(favorite_dealer_seq)
     if sets:
+        ensure_settings(customer_id)
         db.execute(
             f"UPDATE customer_setting SET {', '.join(sets)} WHERE customer_id = %s",
             (*params, customer_id),
@@ -91,6 +96,7 @@ def set_default_payment(customer_id, method):
     ensure_customer(customer_id)
     if method not in PAYMENT_METHODS:
         raise MyPageError("지원하지 않는 결제수단입니다.", 422)
+    ensure_settings(customer_id)
     db.execute(
         "UPDATE customer_setting SET default_payment = %s WHERE customer_id = %s",
         (method, customer_id),
@@ -129,7 +135,7 @@ def _product_row(row):
         "price": int(str(row["p_price"]).replace(",", "")),
         "gender": row["p_gender"],
         "liked": bool(row["liked"]),
-        "image_url": f"/products/{code}/image",
+        "image_url": f"/api/v1/products/{quote(code, safe='')}/image",
     }
 
 
@@ -209,11 +215,13 @@ def _issue_due_coupons(customer_id, coupons, now):
         if c["issued_at"] is not None:
             continue
         kind = c["condition_type"]
+        if kind in ('SIGNUP', 'FIRST_REVIEW') and (not isinstance(c['valid_days'], int) or c['valid_days'] <= 0):
+            raise MyPageError('쿠폰 유효기간 설정을 확인해 주세요.', 409)
         if kind == "SIGNUP":
             expires = now + timedelta(days=c["valid_days"])
         elif kind == "FIRST_REVIEW" and has_review:
             expires = now + timedelta(days=c["valid_days"])
-        elif kind == "EVENT" and c["event_start"] <= now <= c["event_end"]:
+        elif kind == "EVENT" and c["event_start"] is not None and c["event_end"] is not None and c["event_start"] <= now <= c["event_end"]:
             expires = c["event_end"]
         else:
             continue
@@ -225,8 +233,8 @@ def _issue_due_coupons(customer_id, coupons, now):
         c["issued_at"], c["expires_at"], c["used_at"] = now, expires, None
 
 
-def get_coupons(customer_id):
-    """쿠폰함. 발급 조건을 확인해 새로 받을 수 있는 쿠폰은 발급한 뒤 목록을 돌려준다."""
+def get_coupons(customer_id, issue=False):
+    """쿠폰함 GET은 읽기 전용. 발급은 명시적인 POST에서만 실행한다."""
     ensure_customer(customer_id)
     now = datetime.now()
     sql = (
@@ -237,13 +245,16 @@ def get_coupons(customer_id):
         "ON cc.coupon_id = c.coupon_id AND cc.customer_id = %s ORDER BY c.coupon_id"
     )
     coupons = db.query(sql, (customer_id,))
-    _issue_due_coupons(customer_id, coupons, now)
+    if issue:
+        _issue_due_coupons(customer_id, coupons, now)
 
     result = []
     for c in coupons:
         issued = c["issued_at"] is not None
         if issued and c["used_at"] is not None:
             badge, available = "사용 완료", False
+        elif issued and c['expires_at'] is None:
+            raise MyPageError('쿠폰 만료일 설정을 확인해 주세요.', 409)
         elif issued and c["expires_at"] < now:
             badge, available = "기간 만료", False
         elif issued:
@@ -253,7 +264,7 @@ def get_coupons(customer_id):
 
         if issued:
             period = f"{c['issued_at']:%Y-%m-%d} ~ {c['expires_at']:%Y-%m-%d}"
-        elif c["condition_type"] == "EVENT":
+        elif c["condition_type"] == "EVENT" and c['event_start'] is not None and c['event_end'] is not None:
             period = f"{c['event_start']:%Y-%m-%d} ~ {c['event_end']:%Y-%m-%d}"
         else:
             period = "첫 리뷰 작성 후 발급"

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'fitpick_mypage_ui.dart';
 
 /// 11. 앱 설정
-/// 설정 저장 필드가 ERD에 없으므로 스위치는 현재 화면에서만 변경된다.
+/// 서버 설정 API는 있으나 이 화면은 아직 로컬 위젯 상태만 변경하고 저장하지 않는다.
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
 

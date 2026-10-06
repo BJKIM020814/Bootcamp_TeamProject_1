@@ -23,12 +23,25 @@ class Commerce:
                 conn.rollback()
                 raise
 
-    def sync_customer(self, email, age=None):
-        # 중복/재시도 시 구매데이터와 기존 age 보존.
-        # Firebase 이메일을 MySQL customer_id로 연결한다. 인증 개인정보는 MySQL에 복제하지 않는다.
+    def sync_customer(self, account, age=None):
+        """Mirror canonical Firestore profile fields into the MySQL customer row.
+
+        Firebase Authentication owns passwords. MySQL is the commerce mirror and never
+        receives the Firebase password or a password hash.
+        """
+        if isinstance(account, str):
+            # Compatibility for old callers; new signup/login pass the whole profile.
+            account = {'email': account, 'age': age}
+        email = account['email']
+        profile_age = account.get('age', age)
         db.execute("INSERT INTO customer (customer_id,password,phone,name,gender,address,age,totalprice) "
-                   "VALUES (%s,'','','','','',%s,0) ON DUPLICATE KEY UPDATE customer_id=customer_id",
-                   (email, '' if age is None else str(age)))
+                   "VALUES (%s,'',%s,%s,%s,%s,%s,0) "
+                   "ON DUPLICATE KEY UPDATE password='',phone=VALUES(phone),name=VALUES(name),"
+                   "gender=VALUES(gender),address=VALUES(address),"
+                   "age=IF(%s IS NULL,age,VALUES(age))",
+                   (email, account.get('phoneNumber', ''), account.get('name', ''),
+                    account.get('gender', ''), account.get('address', ''),
+                    0 if profile_age is None else profile_age, profile_age))
 
     @staticmethod
     def review_select():

@@ -8,6 +8,8 @@ import 'package:get/get.dart';
 
 enum _OrderStatus { inProgress, completed, cancelled }
 
+/// 로컬 샘플 주문 목록과 상세/클레임 화면 이동을 제공한다.
+/// 실제 MySQL 구매 내역 조회와는 연결되어 있지 않다.
 class _OrderRecord {
   const _OrderRecord({
     required this.date,

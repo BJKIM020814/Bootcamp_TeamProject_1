@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-/// 로그인 여부를 앱 전역에서 공유하는 간단한 상태.
-/// 실제 인증 연동 전까지는 로그인 성공 시 true로만 바뀐다.
+/// 서버 로그인 결과에서 얻은 회원 ID를 Flutter 화면들이 공유한다.
+/// 실제 비밀번호 인증과 세션 토큰 검증은 [FitpickApiService]와 FastAPI가 담당한다.
 class AuthController extends GetxController {
   static AuthController get to => Get.isRegistered<AuthController>()
       ? Get.find<AuthController>()
@@ -10,7 +10,7 @@ class AuthController extends GetxController {
 
   final RxBool isLoggedIn = false.obs;
 
-  /// 로그인한 계정의 email. 서버(MySQL)에서는 이 값이 customer_id 이다.
+  /// 로그인 계정 이메일. 서버 토큰의 소유자이며 MySQL customer 키로도 사용한다.
   final RxnString customerId = RxnString();
 
   void login({String? email}) {
@@ -24,9 +24,8 @@ class AuthController extends GetxController {
   }
 }
 
-/// 장바구니 아이콘 + 담긴 수량 배지.
-/// 로그인하지 않았으면 배지를 숨긴다.
-/// TODO: DB 연동 후에는 count를 로그인한 사용자의 실제 장바구니 수량으로 교체한다.
+/// 앱바에서 로그인 상태에 따라 장바구니 배지를 표시하는 아이콘.
+/// count는 호출 화면이 제공하며, 현재 장바구니는 로컬 데모 상태다.
 class CartBadgeIcon extends StatelessWidget {
   const CartBadgeIcon({
     super.key,

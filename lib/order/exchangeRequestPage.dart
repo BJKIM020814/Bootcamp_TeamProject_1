@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 
+/// 교환 신청 입력 UI. 제출 데이터는 현재 서버/DB에 저장되지 않는다.
 class Exchangerequestpage extends StatefulWidget {
   const Exchangerequestpage({
     super.key,

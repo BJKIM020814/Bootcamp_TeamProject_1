@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 
 enum _ClaimType { exchange, returnItem }
 
+/// 예시 교환/반품 이력을 로컬 목록으로 보여 준다. 신청 API 조회가 연결되지 않았다.
 class _ClaimRecord {
   const _ClaimRecord({
     required this.date,

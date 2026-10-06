@@ -26,6 +26,7 @@ class _SignUpPageState extends State<SignUpPage> {
   final _phoneNumberController = TextEditingController();
   final _addressController = TextEditingController();
   String _gender = '선택 안 함';
+  int _shoeSize = 270;
   bool _agreed = false;
   bool _obscurePassword = true;
   bool _isLoading = false;
@@ -62,6 +63,7 @@ class _SignUpPageState extends State<SignUpPage> {
         'gender': _gender,
         'address': _addressController.text.trim(),
         'signupPath': '이메일',
+        'shoeSize': _shoeSize,
         'agreed': _agreed,
       }, startSession: false);
       // 응답을 기다리는 동안 화면이 닫혔다면 UI와 Navigator를 사용하지 않는다.
@@ -235,6 +237,25 @@ class _SignUpPageState extends State<SignUpPage> {
                     .toList(),
                 onChanged: (value) =>
                     setState(() => _gender = value ?? _gender),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                '신발 사이즈',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<int>(
+                initialValue: _shoeSize,
+                isExpanded: true,
+                decoration: _inputDecoration(),
+                borderRadius: BorderRadius.circular(12),
+                items: [
+                  for (int size = 220; size <= 310; size += 5)
+                    DropdownMenuItem(value: size, child: Text('${size}mm')),
+                ],
+                onChanged: _isLoading
+                    ? null
+                    : (value) => setState(() => _shoeSize = value ?? _shoeSize),
               ),
               const SizedBox(height: 16),
               _InputField(

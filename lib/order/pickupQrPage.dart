@@ -3,6 +3,7 @@ import 'package:bootcamp_teamproject_1/order/orderDetailPage.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+/// 실제 주문 토큰 대신 샘플 주문 정보와 QR/난수 자리표시자를 보여 주는 데모 화면.
 class Pickupqrpage extends StatefulWidget {
   const Pickupqrpage({
     super.key,

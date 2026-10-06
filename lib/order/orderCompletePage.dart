@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
+/// 데모 주문 완료 화면. 호출 인자는 표시용이며 DB 결제/주문 성공을 의미하지 않는다.
 class Ordercompletepage extends StatefulWidget {
   const Ordercompletepage({
     super.key,

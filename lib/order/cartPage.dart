@@ -5,6 +5,7 @@ import 'package:bootcamp_teamproject_1/order/storePickerStub.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+/// 선택한 장바구니 목업을 보여 주고 결제 화면으로 이동한다.
 class Cartpage extends StatefulWidget {
   const Cartpage({super.key});
 
@@ -18,7 +19,7 @@ class _CartpageState extends State<Cartpage> {
   @override
   void initState() {
     super.initState();
-    // TODO: 상품 상세 페이지에 실제 "담기" 기능이 연결되면 이 시드 호출을 제거한다.
+    // 서버 장바구니가 아직 없으므로 최초 진입 때만 화면용 샘플을 채운다.
     cartController.seedSampleData();
   }
 
@@ -68,10 +69,7 @@ class _CartpageState extends State<Cartpage> {
               border: Border.all(color: Colors.grey.shade300),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(
-              Icons.shopping_bag_outlined,
-              color: Colors.grey,
-            ),
+            child: const Icon(Icons.shopping_bag_outlined, color: Colors.grey),
           ),
           const SizedBox(height: 20),
           const Text(
@@ -402,9 +400,7 @@ class _CartpageState extends State<Cartpage> {
               width: double.infinity,
               height: 50,
               child: ElevatedButton(
-                onPressed: cartController.selectedCount == 0
-                    ? null
-                    : _checkout,
+                onPressed: cartController.selectedCount == 0 ? null : _checkout,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.black,
                   foregroundColor: Colors.white,

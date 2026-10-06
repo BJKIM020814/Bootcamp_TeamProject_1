@@ -57,6 +57,16 @@ def get_options(product):
     return colors, sizes
 
 
+def get_variants(product):
+    # 각 조합은 반드시 실제 p_code로 연결한다. 색상/사이즈 목록의 임의 곱을 만들지 않는다.
+    if not product['p_sku']:
+        return [product]
+    return db.query(
+        f'SELECT {_PRODUCT_COLUMNS} FROM product WHERE p_sku=%s AND b_name=%s ORDER BY p_code',
+        (product['p_sku'], product['b_name']),
+    )
+
+
 def get_image(product_code):
     row = db.query_one("SELECT p_image FROM product WHERE p_code = %s", (product_code,))
     return row["p_image"] if row else None

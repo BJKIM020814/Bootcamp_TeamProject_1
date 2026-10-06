@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:async';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'api_config.dart';
 
@@ -13,6 +15,10 @@ class FitpickApiService {
   static const baseUrl = ApiConfig.baseUrl;
   String? _token;
   bool get hasSession => _token != null;
+  Map<String, String> get authorizationHeaders => {
+    if (_token != null) 'Authorization': 'Bearer $_token',
+  };
+  void clearSession() => _token = null;
 
   // 모든 페이지 요청의 JSON 변환, 인증 헤더, 타임아웃, 오류 처리를 한곳에서 담당한다.
   Future<Map<String, dynamic>> _request(
@@ -25,12 +31,35 @@ class FitpickApiService {
     // 서버는 이 토큰으로 회원을 결정한다. 회원 이메일을 별도 요청 필드로 보내지 않는다.
     if (_token != null) request.headers['Authorization'] = 'Bearer $_token';
     if (body != null) request.body = jsonEncode(body);
-    final response = await http.Response.fromStream(
-      await _client.send(request).timeout(const Duration(seconds: 15)),
-    ).timeout(const Duration(seconds: 15));
-    final decoded = response.body.isEmpty
-        ? <String, dynamic>{}
-        : jsonDecode(utf8.decode(response.bodyBytes));
+    final http.Response response;
+    try {
+      response = await http.Response.fromStream(
+        await _client.send(request).timeout(const Duration(seconds: 15)),
+      ).timeout(const Duration(seconds: 15));
+    } on TimeoutException {
+      throw const FitpickApiException(408, '서버 응답 시간이 초과되었습니다. 다시 시도해 주세요.');
+    } on SocketException {
+      throw const FitpickApiException(
+        503,
+        '서버에 연결할 수 없습니다. 네트워크와 서버 주소를 확인해 주세요.',
+      );
+    } on http.ClientException {
+      throw const FitpickApiException(
+        503,
+        '서버 요청을 전송하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+      );
+    }
+
+    // JSON이 깨진 401 응답도 만료된 세션을 반드시 제거한다.
+    if (response.statusCode == 401) clearSession();
+    dynamic decoded;
+    try {
+      decoded = response.body.isEmpty
+          ? <String, dynamic>{}
+          : jsonDecode(utf8.decode(response.bodyBytes));
+    } on FormatException {
+      throw FitpickApiException(response.statusCode, '서버 응답 형식을 확인할 수 없습니다.');
+    }
     // 204 성공은 빈 Map으로 처리하고, 인증 만료(401)는 저장된 토큰도 제거한다.
     if (response.statusCode < 200 || response.statusCode >= 300) {
       if (response.statusCode == 401) _token = null;
@@ -39,7 +68,10 @@ class FitpickApiService {
         decoded is Map ? decoded['detail'] : '서버 요청을 처리할 수 없습니다.',
       );
     }
-    return Map<String, dynamic>.from(decoded as Map);
+    if (decoded is! Map) {
+      throw FitpickApiException(response.statusCode, '서버 응답 형식이 올바르지 않습니다.');
+    }
+    return Map<String, dynamic>.from(decoded);
   }
 
   /// 로그인 성공 후 받은 토큰을 저장해 이후 보호된 API 요청에 자동으로 첨부한다.
@@ -78,6 +110,17 @@ class FitpickApiService {
 
   /// 현재 세션의 회원정보를 가져온다. 비밀번호는 서버 응답에 포함되지 않는다.
   Future<Map<String, dynamic>> me() => _request('GET', '/login/me');
+
+  /// Firebase 프로필을 원본으로 저장하고 동일 값을 MySQL customer에도 동기화한다.
+  Future<Map<String, dynamic>> updateAccountProfile({
+    required String name,
+    required String phoneNumber,
+    required int shoeSize,
+  }) => _request(
+    'PATCH',
+    '/login/me',
+    body: {'name': name, 'phoneNumber': phoneNumber, 'shoeSize': shoeSize},
+  );
 
   /// Firebase 가입은 됐지만 MySQL 연결이 실패했을 때 로그인 후 재시도한다.
   Future<Map<String, dynamic>> syncCustomer() =>

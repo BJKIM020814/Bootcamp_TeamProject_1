@@ -1,5 +1,6 @@
 """Discover router: catalogue, selection options, reviews and pickup points."""
 from typing import Optional
+from urllib.parse import quote
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response
 
@@ -12,18 +13,27 @@ from .schemas import (
 router = APIRouter(prefix="/api/v1/discover", tags=["Discover"])
 
 
+# 상품 행을 화면 응답으로 바꾸며 저장된 문자열 가격의 쉼표를 정수화한다.
 def _image_url(row):
-    return f"/api/v1/discover/products/{row['p_code']}/image" if row["image_bytes"] else None
+    return f"/api/v1/discover/products/{quote(row['p_code'], safe='')}/image" if row["image_bytes"] else None
 
 
 def _summary(row):
+    try:
+        price = int(str(row['p_price']).replace(',', ''))
+        if price < 0:
+            raise ValueError()
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(409, detail={'code': 'INVALID_PRODUCT_PRICE',
+            'message': '등록된 상품 가격을 확인해 주세요.'}) from exc
     return ProductSummary(
         product_code=row["p_code"], name=row["p_name"], brand=row["b_name"],
-        price=int(row["p_price"]), sku=row["p_sku"], gender=row["p_gender"],
+        price=price, sku=row["p_sku"], gender=row["p_gender"],
         size=row["p_size"] or None, color=row["p_color"] or None, image_url=_image_url(row),
     )
 
 
+# 목록은 DB에 등록된 행만 반환하고 검색/필터/페이지 범위를 저장소에 전달한다.
 @router.get("/products", response_model=ProductListResponse, summary="Discover 상품 목록·검색·대상·브랜드 필터")
 def products(
     keyword: Optional[str] = Query(default=None, max_length=45, description="상품명·브랜드·상품코드 검색"),
@@ -46,9 +56,12 @@ def product_detail(product_code: str):
     row = repository.get_product(product_code)
     if row is None:
         raise HTTPException(status_code=404, detail={"code": "PRODUCT_NOT_FOUND", "message": "상품을 찾을 수 없습니다."})
-    colors, sizes = repository.get_options(row)
+    # 표시용 색상/사이즈뿐 아니라 실제 상품코드가 포함된 옵션 행도 반환한다.
+    variants = [_summary(option) for option in repository.get_variants(row)]
+    colors = sorted({v.color for v in variants if v.color})
+    sizes = sorted({v.size for v in variants if v.size and v.size > 0})
     summary = _summary(row)
-    return ProductDetail(**summary.model_dump(), available_colors=colors, available_sizes=sizes,
+    return ProductDetail(**summary.model_dump(), available_colors=colors, available_sizes=sizes, variants=variants,
         option_notice=None if colors or sizes else "현재 이 상품 코드에 등록된 색상·사이즈 옵션이 없습니다.")
 
 

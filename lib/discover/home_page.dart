@@ -7,6 +7,8 @@ import 'package:bootcamp_teamproject_1/user/loginpage.dart';
 import 'package:bootcamp_teamproject_1/user/mypage/my_page.dart';
 import 'package:flutter/material.dart';
 
+/// Discover 첫 화면. 현재 홈의 추천 카드/배너는 정적 목업이며,
+/// 상품 검색·목록 및 매장 선택 화면은 서버 조회 데이터를 사용한다.
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -21,6 +23,7 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    // 현재 DB에 홈 큐레이션 관계가 없어 디자인 확인용 카드만 정적으로 노출한다.
     const products = [
       (
         'NEW BALANCE',
@@ -361,6 +364,7 @@ class _HomePageState extends State<HomePage> {
                 ),
               ],
             ),
+            // 아래 6개 목업 카드와 무관한 고정 문구이며 실제 DB 집계가 아니다.
             const Text(
               '27개의 실제 모델',
               style: TextStyle(color: Color(0xFF918981), fontSize: 12),

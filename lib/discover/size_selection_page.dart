@@ -39,6 +39,7 @@ class SizeSelectionPage extends StatelessWidget {
           ),
           const Spacer(),
           FilledButton(
+            // 매장 선택 화면은 값을 반환하지만 현재 이 페이지가 받아 저장하지는 않는다.
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (_) => StoreSelectionPage(

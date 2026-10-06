@@ -8,6 +8,7 @@ import 'package:get/get.dart';
 
 enum PickupStage { preparing, completed }
 
+/// 생성자 기본값을 가진 주문 상세 데모. 수령 상태·QR 화면은 실주문 API에서 오지 않는다.
 class Orderdetailpage extends StatefulWidget {
   const Orderdetailpage({
     super.key,

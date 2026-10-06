@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from .commerce import get_commerce
 from .dependencies import current_email
 from .schemas import ReviewFields, ReviewOut, Page
+from .schema_guard import require_schema
 
 router = APIRouter(prefix='/reviews', tags=['1. 리뷰관리'])
 
@@ -24,6 +25,7 @@ def get_review(review_id: int, email=Depends(current_email), commerce=Depends(ge
 @router.put('/{review_id}', response_model=ReviewOut)
 def update_review(review_id: int, data: ReviewFields, email=Depends(current_email), commerce=Depends(get_commerce)):
     # 별점/내용/핏만 수정하고 리뷰의 소유자와 대상 상품은 바꾸지 않는다.
+    require_schema('review', ['review_seq', 'context'], text_lengths={'context': len(data.content)})
     return commerce.update_review(email, review_id, data)
 
 

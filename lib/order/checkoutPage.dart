@@ -11,6 +11,8 @@ class _Coupon {
   final int Function(int subtotal) discount;
 }
 
+/// 장바구니 목업의 금액/매장/결제수단을 확인하는 데모 주문 화면.
+/// 현재 결제수단 선택과 주문 완료는 PG 승인 또는 MySQL 주문 API를 호출하지 않는다.
 class Checkoutpage extends StatefulWidget {
   const Checkoutpage({super.key});
 
@@ -186,10 +188,7 @@ class _CheckoutpageState extends State<Checkoutpage> {
               border: Border.all(color: Colors.grey.shade300),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(
-              Icons.shopping_bag_outlined,
-              color: Colors.grey,
-            ),
+            child: const Icon(Icons.shopping_bag_outlined, color: Colors.grey),
           ),
           const SizedBox(height: 20),
           const Text(
@@ -361,10 +360,7 @@ class _CheckoutpageState extends State<Checkoutpage> {
                 Obx(
                   () => Text(
                     cartController.storeAddress.value,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade600,
-                    ),
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                   ),
                 ),
               ],
@@ -471,10 +467,7 @@ class _CheckoutpageState extends State<Checkoutpage> {
                   ),
                   child: Text(
                     '본사 발송 준비',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.grey.shade700,
-                    ),
+                    style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -531,19 +524,20 @@ class _CheckoutpageState extends State<Checkoutpage> {
   }
 
   Widget _buildPaymentMethods() {
-    return Column(
-      children: [
-        for (var i = 0; i < _paymentMethods.length; i++)
-          RadioListTile<int>(
-            contentPadding: EdgeInsets.zero,
-            dense: true,
-            value: i,
-            groupValue: _paymentMethodIndex,
-            onChanged: (value) =>
-                setState(() => _paymentMethodIndex = value ?? 0),
-            title: Text(_paymentMethods[i]),
-          ),
-      ],
+    return RadioGroup<int>(
+      groupValue: _paymentMethodIndex,
+      onChanged: (value) => setState(() => _paymentMethodIndex = value ?? 0),
+      child: Column(
+        children: [
+          for (var i = 0; i < _paymentMethods.length; i++)
+            RadioListTile<int>(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              value: i,
+              title: Text(_paymentMethods[i]),
+            ),
+        ],
+      ),
     );
   }
 
@@ -597,10 +591,7 @@ class _CheckoutpageState extends State<Checkoutpage> {
             ),
             Text(
               _formatWon(total),
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
           ],
         ),

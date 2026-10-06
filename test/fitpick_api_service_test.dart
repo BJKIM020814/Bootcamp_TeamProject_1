@@ -63,4 +63,21 @@ void main() {
     await api.updateSettings(orderNotification: false);
     api.dispose();
   });
+
+  test('malformed server response is converted to an API error', () async {
+    final api = FitpickApiService(
+      client: MockClient((_) async => http.Response('<html>error</html>', 502)),
+    );
+    await expectLater(
+      api.faqs(),
+      throwsA(
+        isA<FitpickApiException>().having(
+          (error) => error.message,
+          'message',
+          contains('응답 형식'),
+        ),
+      ),
+    );
+    api.dispose();
+  });
 }

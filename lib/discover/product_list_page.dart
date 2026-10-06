@@ -44,10 +44,12 @@ class _ProductListPageState extends State<ProductListPage> {
     body: FutureBuilder<_CatalogData>(
       future: _catalog,
       builder: (context, snap) {
-        if (snap.connectionState != ConnectionState.done)
+        if (snap.connectionState != ConnectionState.done) {
           return const Center(child: CircularProgressIndicator());
-        if (snap.hasError)
+        }
+        if (snap.hasError) {
           return _ErrorState(error: snap.error, onRetry: _reload);
+        }
         return _body(snap.data!);
       },
     ),

@@ -17,6 +17,7 @@ class StoreSelectionPage extends StatefulWidget {
 }
 
 class _StoreSelectionPageState extends State<StoreSelectionPage> {
+  // 상품 코드/옵션은 호출부에서 전달되지만, 현재 화면은 전체 픽업 지점만 조회한다.
   final _api = DiscoverApi();
   final _search = TextEditingController();
   late Future<List<PickupStore>> _stores;
@@ -29,12 +30,16 @@ class _StoreSelectionPageState extends State<StoreSelectionPage> {
 
   @override
   void dispose() {
+    _api.dispose();
     _search.dispose();
     super.dispose();
   }
 
-  void _reload() =>
-      setState(() => _stores = _api.pickupStores(keyword: _search.text));
+  void _reload() => setState(() {
+    // 새 검색 결과에서 사라진 매장을 이전 선택값으로 확정하지 않는다.
+    _selected = null;
+    _stores = _api.pickupStores(keyword: _search.text);
+  });
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
@@ -55,15 +60,17 @@ class _StoreSelectionPageState extends State<StoreSelectionPage> {
     body: FutureBuilder<List<PickupStore>>(
       future: _stores,
       builder: (context, snap) {
-        if (snap.connectionState != ConnectionState.done)
+        if (snap.connectionState != ConnectionState.done) {
           return const Center(child: CircularProgressIndicator());
-        if (snap.hasError)
+        }
+        if (snap.hasError) {
           return Center(
             child: OutlinedButton(
               onPressed: _reload,
               child: const Text('매장 목록 다시 시도'),
             ),
           );
+        }
         final stores = snap.data!;
         return ListView(
           padding: const EdgeInsets.fromLTRB(20, 10, 20, 28),
@@ -98,19 +105,27 @@ class _StoreSelectionPageState extends State<StoreSelectionPage> {
                 child: Center(child: Text('등록된 수령 매장이 없습니다.')),
               )
             else
-              for (final store in stores)
-                Card(
-                  child: RadioListTile<int>(
-                    value: store.id,
-                    groupValue: _selected?.id,
-                    onChanged: (_) => setState(() => _selected = store),
-                    title: Text(
-                      store.name,
-                      style: const TextStyle(fontWeight: FontWeight.w900),
-                    ),
-                    subtitle: Text('${store.address}\n담당자: ${store.manager}'),
-                  ),
+              RadioGroup<PickupStore>(
+                groupValue: _selected,
+                onChanged: (store) => setState(() => _selected = store),
+                child: Column(
+                  children: [
+                    for (final store in stores)
+                      Card(
+                        child: RadioListTile<PickupStore>(
+                          value: store,
+                          title: Text(
+                            store.name,
+                            style: const TextStyle(fontWeight: FontWeight.w900),
+                          ),
+                          subtitle: Text(
+                            '${store.address}\n담당자: ${store.manager}',
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
+              ),
           ],
         );
       },

@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class Output(BaseModel):
@@ -47,6 +47,7 @@ class StockItem(Output):
 class StockPage(Output):
     items: list[StockItem]
     total: int
+    unresolved_product_codes: list[str] = Field(default_factory=list)
 
 
 class SalesSummary(Output):

@@ -13,7 +13,7 @@ class CartItem {
     int quantity = 1,
     bool selected = true,
   }) : quantity = quantity.obs,
-      selected = selected.obs;
+       selected = selected.obs;
 
   final String id;
   final String brand;
@@ -26,8 +26,8 @@ class CartItem {
   final RxBool selected;
 }
 
-/// 장바구니 전역 상태. 다른 화면(상품 상세 등)에서도
-/// `CartController.to.addItem(...)`으로 담기 기능을 연결할 수 있다.
+/// 앱 화면 사이에서 공유하는 장바구니 데모 상태.
+/// 현재 서버 장바구니 테이블/API가 연결되기 전까지 변경 내용은 메모리에만 있다.
 class CartController extends GetxController {
   static CartController get to => Get.isRegistered<CartController>()
       ? Get.find<CartController>()
@@ -43,8 +43,7 @@ class CartController extends GetxController {
   bool get isAllSelected =>
       items.isNotEmpty && items.every((item) => item.selected.value);
 
-  int get selectedCount =>
-      items.where((item) => item.selected.value).length;
+  int get selectedCount => items.where((item) => item.selected.value).length;
 
   int get selectedTotal => items
       .where((item) => item.selected.value)
@@ -54,8 +53,7 @@ class CartController extends GetxController {
 
   void removeItem(String id) => items.removeWhere((item) => item.id == id);
 
-  void removeSelected() =>
-      items.removeWhere((item) => item.selected.value);
+  void removeSelected() => items.removeWhere((item) => item.selected.value);
 
   void toggleItem(String id) {
     final item = items.firstWhereOrNull((item) => item.id == id);
@@ -82,8 +80,7 @@ class CartController extends GetxController {
     storeAddress.value = address;
   }
 
-  /// 데모/테스트용 샘플 데이터.
-  /// TODO: 상품 상세 페이지에 실제 "담기" 기능이 연결되면 이 시드 호출을 제거한다.
+  /// 비어 있는 장바구니 화면의 UI 확인을 위한 목업 데이터를 한 번 추가한다.
   void seedSampleData() {
     if (items.isNotEmpty) return;
     items.addAll([

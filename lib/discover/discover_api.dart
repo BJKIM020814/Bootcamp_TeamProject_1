@@ -1,9 +1,11 @@
-/// Discover FastAPI client and response models.
-///
-/// Run with --dart-define=DISCOVER_API_BASE_URL=http://127.0.0.1:8000 for
-/// Chrome. Android emulator and physical-device addresses are intentionally
-/// supplied by the run configuration, never stored with DB credentials.
+// Discover FastAPI client and response models.
+//
+// Run with --dart-define=DISCOVER_API_BASE_URL=http://127.0.0.1:8000 for
+// Chrome. Android emulator and physical-device addresses are intentionally
+// supplied by the run configuration, never stored with DB credentials.
 import 'dart:convert';
+import 'dart:async';
+import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import '../services/api_config.dart';
@@ -32,6 +34,7 @@ class DiscoverProduct {
     this.colors = const [],
     this.sizes = const [],
     this.optionNotice,
+    this.variants = const [],
   });
 
   final String code;
@@ -46,26 +49,34 @@ class DiscoverProduct {
   final List<String> colors;
   final List<int> sizes;
   final String? optionNotice;
+  final List<DiscoverProduct> variants;
 
-  factory DiscoverProduct.fromJson(Map<String, dynamic> json) =>
-      DiscoverProduct(
-        code: json['product_code'] as String,
-        name: json['name'] as String,
-        brand: json['brand'] as String,
-        price: json['price'] as int,
-        sku: json['sku'] as String,
-        gender: json['gender'] as String,
-        size: json['size'] as int?,
-        color: json['color'] as String?,
-        imagePath: json['image_url'] as String?,
-        colors: (json['available_colors'] as List? ?? const [])
-            .map((value) => value as String)
-            .toList(),
-        sizes: (json['available_sizes'] as List? ?? const [])
-            .map((value) => value as int)
-            .toList(),
-        optionNotice: json['option_notice'] as String?,
-      );
+  factory DiscoverProduct.fromJson(
+    Map<String, dynamic> json,
+  ) => DiscoverProduct(
+    code: json['product_code'] as String,
+    name: json['name'] as String,
+    brand: json['brand'] as String,
+    price: json['price'] as int,
+    sku: json['sku'] as String,
+    gender: json['gender'] as String,
+    size: json['size'] as int?,
+    color: json['color'] as String?,
+    imagePath: json['image_url'] as String?,
+    colors: (json['available_colors'] as List? ?? const [])
+        .map((value) => value as String)
+        .toList(),
+    sizes: (json['available_sizes'] as List? ?? const [])
+        .map((value) => value as int)
+        .toList(),
+    optionNotice: json['option_notice'] as String?,
+    variants: (json['variants'] as List? ?? const [])
+        .map(
+          (value) =>
+              DiscoverProduct.fromJson(Map<String, dynamic>.from(value as Map)),
+        )
+        .toList(),
+  );
 }
 
 class DiscoverFilters {
@@ -116,6 +127,16 @@ class DiscoverApi {
     defaultValue: ApiConfig.baseUrl,
   );
   final http.Client _client;
+  void dispose() => _client.close();
+
+  Future<List<Map<String, dynamic>>> reviews(String code) async {
+    final data = await _getObject(
+      '/api/v1/discover/products/${Uri.encodeComponent(code)}/reviews',
+    );
+    return (data['items'] as List)
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
+  }
 
   Uri _uri(String path, [Map<String, String>? query]) =>
       Uri.parse(_baseUrl).resolve(path).replace(queryParameters: query);
@@ -124,12 +145,30 @@ class DiscoverApi {
     String path, [
     Map<String, String>? query,
   ]) async {
-    final response = await _client
-        .get(_uri(path, query))
-        .timeout(const Duration(seconds: 8));
-    final decoded = response.body.isEmpty
-        ? <String, dynamic>{}
-        : jsonDecode(response.body);
+    final http.Response response;
+    try {
+      response = await _client
+          .get(_uri(path, query))
+          .timeout(const Duration(seconds: 8));
+    } on TimeoutException {
+      throw const DiscoverApiException('서버 응답 시간이 초과되었습니다. 다시 시도해 주세요.');
+    } on SocketException {
+      throw const DiscoverApiException('상품 서버에 연결할 수 없습니다. 네트워크를 확인해 주세요.');
+    } on http.ClientException {
+      throw const DiscoverApiException('상품 요청을 전송하지 못했습니다. 잠시 후 다시 시도해 주세요.');
+    }
+
+    dynamic decoded;
+    try {
+      decoded = response.body.isEmpty
+          ? <String, dynamic>{}
+          : jsonDecode(utf8.decode(response.bodyBytes));
+    } on FormatException {
+      throw DiscoverApiException(
+        '상품 서버 응답 형식을 확인할 수 없습니다.',
+        statusCode: response.statusCode,
+      );
+    }
     if (response.statusCode < 200 || response.statusCode >= 300) {
       final detail = decoded is Map && decoded['detail'] is Map
           ? decoded['detail']
@@ -140,7 +179,13 @@ class DiscoverApi {
         statusCode: response.statusCode,
       );
     }
-    return Map<String, dynamic>.from(decoded as Map);
+    if (decoded is! Map) {
+      throw DiscoverApiException(
+        '상품 서버 응답 형식이 올바르지 않습니다.',
+        statusCode: response.statusCode,
+      );
+    }
+    return Map<String, dynamic>.from(decoded);
   }
 
   Future<DiscoverFilters> filters() async =>
@@ -152,8 +197,9 @@ class DiscoverApi {
     String? gender,
   }) async {
     final query = <String, String>{'limit': '100'};
-    if (keyword != null && keyword.trim().isNotEmpty)
+    if (keyword != null && keyword.trim().isNotEmpty) {
       query['keyword'] = keyword.trim();
+    }
     if (brand != null) query['brand'] = brand;
     if (gender != null) query['gender'] = gender;
     final data = await _getObject('/api/v1/discover/products', query);
