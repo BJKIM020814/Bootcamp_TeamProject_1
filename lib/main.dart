@@ -17,7 +17,10 @@ Future<void> main() async {
   if (naverMapClientId.isNotEmpty && !kIsWeb) {
     await FlutterNaverMap().init(
       clientId: naverMapClientId,
-      onAuthFailed: (_) => debugPrint('Naver Map authentication failed.'),
+      onAuthFailed: (error) => debugPrint(
+        'Naver Map authentication failed: code=${error.code}, '
+        'message=${error.message ?? "(no message)"}',
+      ),
     );
   }
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);

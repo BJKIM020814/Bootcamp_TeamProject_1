@@ -7,9 +7,11 @@ import 'mypage_common.dart';
 import 'mypage_loader.dart';
 import 'mypage_product_list.dart';
 
+/// 로그인 사용자의 최근 본 상품을 서버 데이터로 보여주는 화면.
 class RecentlyViewedPage extends StatelessWidget {
   const RecentlyViewedPage({super.key});
 
+  /// 공통 상품 목록 UI를 재사용하고 찜 변경은 사용자 계정 API에 반영한다.
   @override
   Widget build(BuildContext context) {
     return Scaffold(

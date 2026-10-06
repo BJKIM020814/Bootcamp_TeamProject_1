@@ -27,6 +27,7 @@ class _StoreSelectionPageState extends State<StoreSelectionPage> {
   late Future<List<PickupStore>> _stores;
   PickupStore? _selected;
   Object? _loadError;
+  final Map<int, GlobalKey> _storeTileKeys = {};
   @override
   void initState() {
     super.initState();
@@ -55,6 +56,25 @@ class _StoreSelectionPageState extends State<StoreSelectionPage> {
     _loadError = null;
     _stores = _loadStores();
   });
+
+  /// 지도 마커 또는 목록에서 매장을 선택하고, 지도 선택이면 해당 행을 보여준다.
+  void _selectStore(PickupStore? store, {bool revealInList = false}) {
+    setState(() => _selected = store);
+    if (store == null || !revealInList) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final tileContext = _storeTileKeys[store.id]?.currentContext;
+      if (tileContext != null) {
+        Scrollable.ensureVisible(
+          tileContext,
+          alignment: 0.5,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+        );
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
@@ -155,11 +175,15 @@ class _StoreSelectionPageState extends State<StoreSelectionPage> {
             else
               RadioGroup<PickupStore>(
                 groupValue: _selected,
-                onChanged: (store) => setState(() => _selected = store),
+                onChanged: (store) => _selectStore(store),
                 child: Column(
                   children: [
                     for (final store in stores)
                       Card(
+                        key: _storeTileKeys.putIfAbsent(
+                          store.id,
+                          GlobalKey.new,
+                        ),
                         child: RadioListTile<PickupStore>(
                           value: store,
                           title: Text(
@@ -213,7 +237,14 @@ class _StoreSelectionPageState extends State<StoreSelectionPage> {
       child: SizedBox(
         height: 250,
         child: NaverMap(
+          // 지도는 세로 ListView 안에 있으므로 제스처 우선권을 지도에 줘야
+          // 드래그/핀치 입력이 부모 스크롤에 가로채이지 않는다.
+          forceGesture: true,
           options: NaverMapViewOptions(
+            scrollGesturesEnable: true,
+            zoomGesturesEnable: true,
+            rotationGesturesEnable: true,
+            tiltGesturesEnable: true,
             initialCameraPosition: NCameraPosition(
               target: center,
               zoom: locatedStores.length == 1 ? 14 : 7,
@@ -226,6 +257,8 @@ class _StoreSelectionPageState extends State<StoreSelectionPage> {
                   id: 'pickup-store-${store.id}',
                   position: NLatLng(store.latitude!, store.longitude!),
                   caption: NOverlayCaption(text: store.name),
+                )..setOnTapListener(
+                  (_) => _selectStore(store, revealInList: true),
                 ),
             });
           },
