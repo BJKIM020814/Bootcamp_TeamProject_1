@@ -1,5 +1,6 @@
 # 실행: .venv/bin/uvicorn python.fastapi.main:app --host 0.0.0.0 --port 8000
 # 서버 시작 지점: 앱 초기화, CORS, 페이지 라우터, 공통 DB 오류 응답을 등록한다.
+"""All-in-one API entry point for customer Discover/My FitPick and headquarters routes."""
 from contextlib import asynccontextmanager
 import os
 import sqlite3
@@ -16,6 +17,8 @@ from . import app_settings
 from .discover.router import router as discover_router
 from .order.router import router as order_router
 from .user.main import router as user_router
+from .user.main import mypage_error_handler
+from .user.mypage_data import MyPageError
 from .headquarters import routers as headquarters_routers
 
 
@@ -29,7 +32,7 @@ async def lifespan(app):
 app = FastAPI(title='FITPICK 페이지 API', version='1.0.0', lifespan=lifespan)
 origins = [v.strip() for v in os.getenv('API_CORS_ORIGINS', '').split(',') if v.strip()]
 app.add_middleware(CORSMiddleware, allow_origins=origins,
-                   allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|192\.168\.20\.68)(:\d+)?$",
+                   allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3})(:\d+)?$",
                    allow_methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
                    allow_headers=['Authorization', 'Content-Type'])
 for module in (login, signup, review_write, review_management, notifications, app_settings, customer_support):
@@ -97,6 +100,7 @@ async def firebase_credentials_unavailable(request: Request, exc: Exception):
 
 
 app.add_exception_handler(FirebaseCredentialsConfigurationError, firebase_credentials_unavailable)
+app.add_exception_handler(MyPageError, mypage_error_handler)
 for error in (DBError, sqlite3.Error, GoogleAPICallError, DefaultCredentialsError, RefreshError):
     app.add_exception_handler(error, unavailable)
 

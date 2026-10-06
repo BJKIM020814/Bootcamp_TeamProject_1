@@ -33,14 +33,35 @@ class HeadquartersEmployee:
 
 
 def current_headquarters_employee(email=Depends(current_email), accounts=Depends(get_accounts)):
-    # Customer sessions do not imply staff access. A staff document must explicitly bind
-    # the authenticated email; unknown or ambiguous mappings are denied by default.
-    docs = list(accounts.client.collection('employee').where(
-        filter=FieldFilter('email', '==', email)
-    ).limit(2).stream())
+    # 고객/관리자 모두 Firebase Auth 계정에서 발급된 로그인만 사용한다. 직원 권한은 UID가 원본이다.
+    # 구형 직원 문서의 email 연결은 전환 기간에만 보조로 허용하며, 모호한 매핑은 항상 거부한다.
+    account_doc = accounts.find(email) if hasattr(accounts, 'find') else None
+    account = account_doc.to_dict() if account_doc else {}
+    firebase_uid = account.get('firebaseUid') if isinstance(account, dict) else None
+    employee_collection = accounts.client.collection('employee')
+    docs = []
+    if isinstance(firebase_uid, str) and firebase_uid:
+        direct = employee_collection.document(firebase_uid).get()
+        if direct.exists:
+            docs.append(direct)
+        docs.extend(employee_collection.where(
+            filter=FieldFilter('firebaseUid', '==', firebase_uid)
+        ).limit(2).stream())
+    linked_by_email = False
+    if not docs:
+        linked_by_email = True
+        docs.extend(employee_collection.where(
+            filter=FieldFilter('email', '==', email)
+        ).limit(2).stream())
+    # 같은 문서를 document ID와 필드 검색에서 두 번 가져온 경우는 한 건으로 계산한다.
+    docs = list({doc.id: doc for doc in docs}.values())
     if len(docs) != 1:
         raise HTTPException(403, '본사 직원 계정 연결이 확인되지 않았습니다.')
     employee = docs[0].to_dict() or {}
+    if linked_by_email and isinstance(firebase_uid, str) and firebase_uid:
+        # 기존 employee.email 연결을 UID 연결로 승격한다. 이후 이메일 변경에도 권한 기준은 Auth UID다.
+        docs[0].reference.update({'firebaseUid': firebase_uid})
+        employee['firebaseUid'] = firebase_uid
     employee_id = employee.get('employeeId')
     position = employee.get('position')
     department = employee.get('department')

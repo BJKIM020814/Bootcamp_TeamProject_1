@@ -5,8 +5,14 @@ from fastapi import APIRouter, Depends, Query
 from .commerce import get_commerce
 from .dependencies import current_email, get_local
 from .schemas import ContactCreate, ContactOut, Page
+from .schema_guard import require_schema
 
 router = APIRouter(prefix='/support', tags=['5. 고객센터'])
+
+
+def contact_schema():
+    # 본사 레거시 contact(c_seq/contact_post/c_answer)와 새 문의 계약을 혼동하지 않는다.
+    require_schema('contact', ['contact_seq', 'context', 'response', 'r_date', 'process'])
 
 
 @router.get('/faqs')
@@ -21,18 +27,23 @@ def faqs():
 def contacts(limit: int = Query(20, ge=1, le=100), offset: int = Query(0, ge=0),
              email=Depends(current_email), commerce=Depends(get_commerce)):
     # 내 문의 목록을 최신순으로 조회한다. 본사에서 등록한 답변과 처리 상태도 포함된다.
+    contact_schema()
     return commerce.contacts(email, limit, offset)
 
 
 @router.get('/contacts/{contact_id}', response_model=ContactOut)
 def contact(contact_id: int, email=Depends(current_email), commerce=Depends(get_commerce)):
     # 문의 ID와 토큰 소유자 이메일을 함께 조건으로 사용하여 내 문의 상세만 반환한다.
+    contact_schema()
     return commerce.contact(email, contact_id)
 
 
 @router.post('/contacts', status_code=201, response_model=ContactOut)
 def create_contact(data: ContactCreate, email=Depends(current_email), commerce=Depends(get_commerce), local=Depends(get_local)):
     # 문의가 MySQL에 저장된 뒤 SQLite 접수 알림을 추가한다. 알림 장애로 문의를 다시 생성하지 않는다.
+    contact_schema()
+    require_schema('contact', ['contact_seq', 'context'], auto_increment='contact_seq',
+                   text_lengths={'context': len(data.content)})
     result = commerce.create_contact(email, data)
     try:
         local.add_notification(email, 'support', '문의가 접수되었습니다.', f"문의번호 {result['id']}의 답변을 기다려 주세요.")

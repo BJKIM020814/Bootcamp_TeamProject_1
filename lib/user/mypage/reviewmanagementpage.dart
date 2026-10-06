@@ -4,7 +4,7 @@ import 'fitpick_mypage_ui.dart';
 
 /// 08. 리뷰 관리
 ///
-/// 현재 ERD에는 리뷰 컬렉션이 없어, 존재하지 않는 데이터를 생성하거나 조회하지 않는다.
+/// MySQL 리뷰 및 리뷰 API는 있으나 이 화면은 아직 API를 연결하지 않은 빈 상태 UI다.
 class ReviewManagementPage extends StatelessWidget {
   const ReviewManagementPage({super.key});
 

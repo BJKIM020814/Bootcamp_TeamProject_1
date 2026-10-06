@@ -59,6 +59,28 @@ uvicorn python.fastapi.main:app --reload --host 0.0.0.0 --port 8000
 
 ## 인증 흐름
 
+### Firebase Auth를 기준으로 통합
+
+모바일과 관리자 PAD는 모두 Firebase Authentication 이메일/비밀번호 계정으로 로그인하고,
+FastAPI가 Firestore `account` 프로필과 MySQL `customer`를 같은 이메일로 동기화한다.
+비밀번호는 Firebase Authentication에만 저장하며 Firestore와 MySQL에는 저장하지 않는다.
+
+- 신규 가입: Firebase Auth 사용자 생성 → Firestore `account` 프로필(`firebaseUid`) 생성 → MySQL `customer` 미러링
+- 로그인: Firebase Auth 검증 → Firestore 프로필을 MySQL에 재동기화 → 기존 API 세션 발급
+- 기존 Firestore `password` 계정: 첫 성공 로그인 시에만 Firebase Auth 사용자로 이관하고 legacy password 필드를 제거
+- 프로필 변경: `PATCH /api/login/me`가 Firestore 원본과 MySQL `customer`를 함께 갱신
+
+기존 계정의 Argon2 해시는 Firebase Auth로 직접 가져올 수 없다. 이관 현황은 아래 명령으로 먼저 확인하고,
+MySQL 연결이 복구된 뒤에만 명시적으로 미러링한다.
+
+```sh
+python -m python.fastapi.identity_sync
+python -m python.fastapi.identity_sync --apply-mysql
+```
+
+`employee` 문서는 `firebaseUid`를 권한 연결 키로 사용한다. 기존 `employee.email` 매핑은 첫 본사 API 요청 시
+UID로 승격된다. 이메일 또는 UID가 없는 직원 문서는 계정을 추측해 연결하지 않으므로 관리자 권한이 거부된다.
+
 회원가입/로그인/FAQ 외의 페이지 API는 `Authorization: Bearer <accessToken>` 헤더가 필요하다.
 회원 이메일을 URL/본문에 보내서 타인의 데이터를 선택할 수 없고 서버가 토큰으로 결정한다.
 

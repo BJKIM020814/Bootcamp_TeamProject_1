@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import 'package:bootcamp_teamproject_1/services/account_service.dart';
-import 'package:bootcamp_teamproject_1/services/mypage_api.dart';
 import 'package:bootcamp_teamproject_1/user/authController.dart';
 
 import 'change_password_page.dart';
@@ -31,7 +30,9 @@ class _ProfilePageState extends State<ProfilePage> {
   late final _name = TextEditingController(text: widget.profile.name);
   late final _phone = TextEditingController(text: widget.profile.phone);
   late final _email = TextEditingController(text: widget.profile.email);
-  late String _size = widget.profile.shoeSize;
+  late String? _size = _sizes.contains(widget.profile.shoeSize)
+      ? widget.profile.shoeSize
+      : null;
   bool _saving = false;
 
   @override
@@ -46,7 +47,7 @@ class _ProfilePageState extends State<ProfilePage> {
     context,
   ).showSnackBar(SnackBar(content: Text(message)));
 
-  /// 이름/전화번호는 Firebase account 에, 신발 사이즈는 서버(MySQL)에 저장한다.
+  /// 이름/전화번호/신발 사이즈를 Firebase account 원본에 함께 저장한다.
   Future<void> _save() async {
     if (_saving) return;
     final email = AuthController.to.customerId.value;
@@ -54,16 +55,19 @@ class _ProfilePageState extends State<ProfilePage> {
     final name = _name.text.trim();
     final phone = _phone.text.trim();
     if (name.isEmpty) return _toast('이름을 입력해 주세요.');
+    final size = _size;
+    if (size == null) return _toast('신발 사이즈를 선택해 주세요.');
     if (!RegExp(r'^[0-9\-\s]{9,13}$').hasMatch(phone)) {
       return _toast('휴대폰 번호 형식이 올바르지 않습니다.');
     }
 
     setState(() => _saving = true);
     try {
-      await AccountService.updateBasic(email, name: name, phone: phone);
-      await MyPageApi.updateShoeSize(
+      await AccountService.updateBasic(
         email,
-        int.parse(_size.replaceAll('mm', '')),
+        name: name,
+        phone: phone,
+        shoeSize: int.parse(size.replaceAll('mm', '')),
       );
       await MyPageController.to.load();
       if (!mounted) return;
@@ -100,12 +104,13 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Widget _dropdown(
-    String value,
+    String? value,
     List<String> items,
     ValueChanged<String> onChanged,
   ) {
     return DropdownButtonFormField<String>(
       initialValue: value,
+      hint: const Text('선택해 주세요'),
       icon: const Icon(Icons.keyboard_arrow_down, color: MpColors.ink),
       decoration: mpInputDecoration(),
       style: const TextStyle(fontSize: 17, color: MpColors.ink),

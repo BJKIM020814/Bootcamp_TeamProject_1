@@ -2,17 +2,37 @@
 """6. 로그인: Firestore account 검증 → 만료/폐기 가능한 서버 세션."""
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
+from google.cloud import firestore
 from .accounts import get_accounts, profile
+from .commerce import get_commerce
 from .dependencies import get_local, current_email, bearer
-from .schemas import LoginInput, SessionOut, AccountOut, PasswordChange
+from .firebase_identity import sign_in_with_password
+from .schemas import LoginInput, SessionOut, AccountOut, PasswordChange, AccountProfilePatch
 
 router = APIRouter(prefix='/login', tags=['6. 로그인'])
 
 
 @router.post('', response_model=SessionOut)
-def login(data: LoginInput, accounts=Depends(get_accounts), local=Depends(get_local)):
-    # 입력 비밀번호를 Firestore 해시와 비교한 후, 사용자가 다른 API에 보낼 Bearer 토큰을 발급한다.
-    account = accounts.authenticate(str(data.email), data.password)
+def login(data: LoginInput, accounts=Depends(get_accounts), commerce=Depends(get_commerce), local=Depends(get_local)):
+    # 모바일/PAD 모두 Firebase Authentication으로 로그인한다. 기존 Firestore 해시는 성공한 첫 로그인에서만 이관한다.
+    email = str(data.email)
+    try:
+        identity = sign_in_with_password(email, data.password)
+        doc = accounts.find(email)
+        if not doc:
+            raise HTTPException(409, 'Firebase 계정 프로필 연결이 필요합니다.')
+        account = doc.to_dict() or {}
+        if account.get('firebaseUid') and account['firebaseUid'] != identity['localId']:
+            raise HTTPException(409, '계정 UID 연결이 일치하지 않습니다. 관리자 확인이 필요합니다.')
+        if not account.get('firebaseUid') or 'password' in account:
+            doc.reference.update({'firebaseUid': identity['localId'], 'password': firestore.DELETE_FIELD})
+            account['firebaseUid'] = identity['localId']
+    except HTTPException as error:
+        if error.status_code != 401:
+            raise
+        account = accounts.migrate_legacy_password(email, data.password)
+    # 로그인 시 Firebase 프로필을 MySQL customer에 재반영해 일시적 연결 실패 뒤에도 복구한다.
+    commerce.sync_customer(account)
     token, expires = local.new_session(str(data.email))
     return {'accessToken': token, 'tokenType': 'bearer', 'expiresAt': expires, 'account': profile(account)}
 
@@ -24,6 +44,19 @@ def me(email=Depends(current_email), accounts=Depends(get_accounts)):
     if not doc:
         raise HTTPException(401, '회원정보를 찾을 수 없습니다.')
     return profile(doc.to_dict())
+
+
+@router.patch('/me', response_model=AccountOut)
+def update_me(data: AccountProfilePatch, email=Depends(current_email), accounts=Depends(get_accounts), commerce=Depends(get_commerce)):
+    # Firestore를 원본으로 갱신한 뒤 동일 필드를 MySQL customer에도 반영한다.
+    account = accounts.update_profile(
+        email,
+        name=data.name,
+        phone_number=data.phoneNumber,
+        shoe_size=data.shoeSize,
+    )
+    commerce.sync_customer(account)
+    return profile(account)
 
 
 @router.post('/logout', status_code=204)

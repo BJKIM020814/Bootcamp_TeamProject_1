@@ -3,6 +3,7 @@ import 'dart:async';
 
 import 'package:bootcamp_teamproject_1/discover/home_page.dart';
 
+/// 브랜드 시작 화면을 잠시 노출한 다음 Discover 홈으로 교체한다.
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
 
@@ -14,6 +15,7 @@ class _SplashPageState extends State<SplashPage> {
   @override
   void initState() {
     super.initState();
+    // 네트워크 요청을 기다리지 않고 고정 시간 뒤 화면을 넘긴다.
     Timer(const Duration(milliseconds: 1600), _moveToHome);
   }
 

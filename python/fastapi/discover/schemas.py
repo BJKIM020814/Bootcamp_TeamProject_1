@@ -41,6 +41,7 @@ class ProductDetail(ProductSummary):
     available_colors: list[str] = Field(default_factory=list)
     available_sizes: list[int] = Field(default_factory=list)
     option_notice: Optional[str] = Field(default=None)
+    variants: list[ProductSummary] = Field(default_factory=list)
 
 
 class ReviewItem(BaseModel):

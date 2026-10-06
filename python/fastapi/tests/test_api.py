@@ -33,6 +33,12 @@ class MemoryAccounts:
         self.authenticate(email, current)
         self.rows[email]['password'] = passwords.hash(next_password)
 
+    def migrate_legacy_password(self, email, password):
+        # 테스트 저장소는 Firebase Admin을 호출하지 않고도 전환 후 프로필 계약을 재현한다.
+        account = self.authenticate(email, password)
+        account['firebaseUid'] = 'uid-' + email
+        return account
+
     def find(self, email):
         row = self.rows.get(email)
         return SimpleNamespace(to_dict=lambda: row) if row else None
@@ -44,9 +50,10 @@ class MemoryCommerce:
         self.fail = False
         self.rows = {}
 
-    def sync_customer(self, email, age=None):
+    def sync_customer(self, account, age=None):
         if self.fail:
             raise db.DBError('private database password')
+        email = account['email'] if isinstance(account, dict) else account
         self.customers.add(email)
 
     def reviews(self, email, limit, offset):
@@ -72,6 +79,15 @@ def api(tmp_path, monkeypatch):
     app.dependency_overrides[get_accounts] = lambda: accounts
     app.dependency_overrides[get_commerce] = lambda: commerce
     monkeypatch.setattr('python.fastapi.main.get_local', lambda: local)
+    # 기존 메모리 API 계약 테스트에서는 호환 스키마를 제공한다. 스키마 차단은 별도 회귀 테스트한다.
+    def schema_columns(sql, params=None):
+        assert 'information_schema.COLUMNS' in sql
+        fields = ('contact_seq', 'context', 'response', 'r_date', 'process', 'review_seq')
+        return [{'name': key, 'extra': 'auto_increment', 'max_length': 2000} for key in fields]
+    monkeypatch.setattr(db, 'query', schema_columns)
+    # API 계약 테스트에서는 Firebase Identity Toolkit 호출을 하지 않고 구형 계정 이관 경로를 검증한다.
+    monkeypatch.setattr('python.fastapi.login.sign_in_with_password',
+                        lambda *_: (_ for _ in ()).throw(HTTPException(401, 'invalid')))
     with TestClient(app) as client:
         yield client, local, accounts, commerce
     app.dependency_overrides.clear()
@@ -79,7 +95,8 @@ def api(tmp_path, monkeypatch):
 
 def signup(client, email='one@example.com'):
     return client.post('/api/signup', json={'email': email, 'password': 'password with spaces ',
-        'name': '사용자', 'phoneNumber': '010-1234-5678', 'address': '서울', 'agreed': True})
+        'name': '사용자', 'phoneNumber': '010-1234-5678', 'address': '서울',
+        'shoeSize': 270, 'agreed': True})
 
 
 def auth(client, email='one@example.com'):
@@ -116,6 +133,20 @@ def test_signup_partial_failure_and_retry(api):
     commerce.fail = False
     assert client.post('/api/signup/sync', headers=headers).json()['customerSynced'] is True
     assert client.post('/api/signup/sync', headers=headers).status_code == 200
+
+
+@pytest.mark.parametrize('shoe_size', [219, 221, 315, '270'])
+def test_signup_rejects_invalid_shoe_size(api, shoe_size):
+    payload = {
+        'email': 'size@example.com',
+        'password': 'password123',
+        'name': '사이즈검증',
+        'phoneNumber': '010-1234-5678',
+        'address': '서울',
+        'shoeSize': shoe_size,
+        'agreed': True,
+    }
+    assert api[0].post('/api/signup', json=payload).status_code == 422
 
 
 @pytest.mark.parametrize('method,path', [('GET', '/reviews'), ('GET', '/reviewable-products'),

@@ -5,12 +5,17 @@ import json
 import os
 from functools import lru_cache
 from pathlib import Path
+import firebase_admin
+from firebase_admin import auth as firebase_auth
+from firebase_admin import firestore as admin_firestore
+from firebase_admin.exceptions import FirebaseError
 from google.cloud import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
 from google.api_core.exceptions import AlreadyExists
 from pwdlib import PasswordHash
 from pwdlib.exceptions import UnknownHashError
 from fastapi import HTTPException
+from .firebase_identity import sign_in_with_password
 
 passwords = PasswordHash.recommended()
 
@@ -50,11 +55,35 @@ def _validate_service_account_environment():
 
 def profile(account):
     # 비밀번호를 제외한 공개 회원 필드만 응답으로 내보내기 위한 허용 목록이다.
-    return {key: account.get(key, '') for key in
-            ('email', 'name', 'phoneNumber', 'gender', 'address', 'signupPath')}
+    result = {key: account.get(key, '') for key in
+              ('email', 'name', 'phoneNumber', 'gender', 'address', 'signupPath')}
+    # 기존 account 문서에는 age가 없을 수 있으므로 빈 문자열 대신 null로 응답한다.
+    result['age'] = account.get('age') if isinstance(account.get('age'), int) else None
+    result['shoeSize'] = account.get('shoeSize') if isinstance(account.get('shoeSize'), int) else None
+    return result
+
+
+@lru_cache
+def firebase_app():
+    """Create one Admin SDK app; its credentials are validated before initialization."""
+    _validate_service_account_environment()
+    try:
+        return firebase_admin.get_app('fitpick-api')
+    except ValueError:
+        try:
+            return firebase_admin.initialize_app(
+                options={'projectId': os.getenv('FIREBASE_PROJECT_ID', 'shoe-20260930')},
+                name='fitpick-api',
+            )
+        except (ValueError, FirebaseError) as exc:
+            raise FirebaseCredentialsConfigurationError(
+                'Firebase Admin 인증 설정을 확인해 주세요.'
+            ) from exc
 
 
 class Accounts:
+    """Firestore account profile repository; Firebase Auth remains the password authority."""
+
     def __init__(self, client):
         self.client = client
 
@@ -66,22 +95,40 @@ class Accounts:
         return docs[0] if docs else None
 
     def create(self, data):
-        # 이메일 기반 고정 문서 ID와 create 연산으로 같은 API를 통한 동시 중복 가입을 막는다.
+        # Firebase Authentication이 비밀번호 원본을 관리한다. Firestore에는 프로필만 보관한다.
         email = str(data['email'])
         if self.find(email):
             raise HTTPException(409, '이미 가입된 이메일입니다.')
-        ref = self.client.collection('account').document('api-' + hashlib.sha256(email.encode()).hexdigest())
-        account = {key: data[key] for key in ('email', 'name', 'phoneNumber', 'gender', 'address', 'signupPath')}
-        account['password'] = passwords.hash(data['password'])
-        # 기존 필드 password 유지, 원문은 저장하지 않는다.
+        try:
+            user = firebase_auth.create_user(
+                email=email,
+                password=data['password'],
+                display_name=data['name'],
+                app=firebase_app(),
+            )
+        except firebase_auth.EmailAlreadyExistsError as exc:
+            raise HTTPException(409, '이미 가입된 이메일입니다.') from exc
+        except FirebaseError as exc:
+            raise HTTPException(503, 'Firebase 회원가입 서비스를 사용할 수 없습니다.') from exc
+
+        account = {key: data[key] for key in (
+            'email', 'name', 'phoneNumber', 'gender', 'address', 'signupPath', 'age', 'shoeSize'
+        ) if key in data}
+        account['firebaseUid'] = user.uid
+        ref = self.client.collection('account').document(user.uid)
         try:
             ref.create(account)
         except AlreadyExists as exc:
+            firebase_auth.delete_user(user.uid, app=firebase_app())
             raise HTTPException(409, '이미 가입된 이메일입니다.') from exc
+        except Exception:
+            # 프로필 생성이 실패하면 방금 생성한 Auth 계정을 되돌려 고아 계정을 만들지 않는다.
+            firebase_auth.delete_user(user.uid, app=firebase_app())
+            raise
         return account
 
     def authenticate(self, email, password):
-        # Argon2 해시를 검증한다. 평문 테스트 계정은 명시적 개발 옵션이 켜진 경우에만 변환한다.
+        """Verify a legacy Firestore password only to perform one-time Firebase Auth migration."""
         doc = self.find(email)
         account = doc.to_dict() if doc else None
         encoded = (account or {}).get('password', '')
@@ -103,27 +150,73 @@ class Accounts:
             raise HTTPException(401, '이메일 또는 비밀번호가 올바르지 않습니다.')
         return account
 
+    def migrate_legacy_password(self, email, password):
+        """Migrate an account after a successful old-password login; Argon hashes cannot be imported."""
+        doc = self.find(email)
+        account = self.authenticate(email, password)
+        try:
+            firebase_auth.get_user_by_email(email, app=firebase_app())
+        except firebase_auth.UserNotFoundError:
+            try:
+                user = firebase_auth.create_user(
+                    email=email,
+                    password=password,
+                    display_name=account.get('name') or None,
+                    app=firebase_app(),
+                )
+            except FirebaseError as exc:
+                raise HTTPException(503, 'Firebase 계정 이관을 완료할 수 없습니다.') from exc
+        except FirebaseError as exc:
+            raise HTTPException(503, 'Firebase 계정 이관을 완료할 수 없습니다.') from exc
+        else:
+            # Auth에 이미 존재하면 이전 Firestore 비밀번호로 인증을 우회할 수 없다.
+            raise HTTPException(401, '이메일 또는 비밀번호가 올바르지 않습니다.')
+        doc.reference.update({
+            'firebaseUid': user.uid,
+            'password': firestore.DELETE_FIELD,
+        })
+        account.pop('password', None)
+        account['firebaseUid'] = user.uid
+        return account
+
 
     def change_password(self, email, current, next_password):
-        # 읽은 문서 버전에 조건을 걸어 동시 변경으로 비밀번호를 덮어쓰지 않는다.
+        # 이관이 완료된 계정은 Firestore password가 없으므로 Auth에서 현재 값을 검증한다.
+        try:
+            identity = sign_in_with_password(email, current)
+            uid = identity['localId']
+        except HTTPException as exc:
+            if exc.status_code != 401:
+                raise
+            uid = self.migrate_legacy_password(email, current)['firebaseUid']
+        try:
+            firebase_auth.update_user(uid, password=next_password, app=firebase_app())
+        except FirebaseError as exc:
+            raise HTTPException(503, 'Firebase 비밀번호를 변경할 수 없습니다.') from exc
+
+    def update_profile(self, email, *, name, phone_number, shoe_size):
+        """Update the canonical Firestore profile. MySQL mirroring is performed by the caller."""
         doc = self.find(email)
         if not doc:
             raise HTTPException(401, '회원정보를 찾을 수 없습니다.')
-        encoded = doc.to_dict().get('password', '')
-        try:
-            valid = isinstance(encoded, str) and passwords.verify(current, encoded)
-        except (ValueError, UnknownHashError):
-            valid = False
-        if not valid:
-            raise HTTPException(401, '현재 비밀번호가 일치하지 않습니다.')
-        doc.reference.update({'password': passwords.hash(next_password)},
-                             option=self.client.write_option(last_update_time=doc.update_time))
+        doc.reference.update({
+            'name': name,
+            'phoneNumber': phone_number,
+            'shoeSize': shoe_size,
+        })
+        account = doc.to_dict() or {}
+        account.update({
+            'name': name,
+            'phoneNumber': phone_number,
+            'shoeSize': shoe_size,
+        })
+        return account
 
 
 @lru_cache
 def get_accounts():
     # Python SDK는 CLI 로그인과 별개다. 실제 서비스 계정 파일과 프로젝트 일치 여부를 먼저 검사한다.
     _validate_service_account_environment()
-    return Accounts(firestore.Client(
-        project=os.getenv('FIREBASE_PROJECT_ID', 'shoe-20260930'),
-        database=os.getenv('FIREBASE_DATABASE_ID', '(default)')))
+    firebase_app()
+    return Accounts(admin_firestore.client(
+        app=firebase_app(), database_id=os.getenv('FIREBASE_DATABASE_ID', '(default)')))

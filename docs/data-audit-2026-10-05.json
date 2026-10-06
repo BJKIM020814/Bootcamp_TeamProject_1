@@ -1,0 +1,2010 @@
+{
+  "mysql": {
+    "authorized_dealer": {
+      "rows": 5,
+      "columns": [
+        {
+          "name": "seq",
+          "type": "int",
+          "nullable": "NO",
+          "key_type": "PRI",
+          "extra": "auto_increment"
+        },
+        {
+          "name": "name",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "dealer_number",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "manager",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "address",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "lat",
+          "type": "double",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "lng",
+          "type": "double",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        }
+      ],
+      "indexes": [
+        {
+          "name": "PRIMARY",
+          "non_unique": 0,
+          "column_name": "seq",
+          "position": 1
+        }
+      ],
+      "foreign_keys": [],
+      "fingerprint": "d187c3bcbc512137bf25913dec54b6eba0f8f4538de193cf52037a8a1c7833e8"
+    },
+    "banner_image": {
+      "rows": 3,
+      "columns": [
+        {
+          "name": "seq",
+          "type": "int",
+          "nullable": "NO",
+          "key_type": "PRI",
+          "extra": ""
+        },
+        {
+          "name": "image",
+          "type": "blob",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        }
+      ],
+      "indexes": [
+        {
+          "name": "PRIMARY",
+          "non_unique": 0,
+          "column_name": "seq",
+          "position": 1
+        }
+      ],
+      "foreign_keys": [],
+      "fingerprint": "1c3619d887b3df68352bf93c77cb6fc206a7656fc6626c807b1ff4c08c0cc342"
+    },
+    "contact": {
+      "rows": 4,
+      "columns": [
+        {
+          "name": "customer_customer_id",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "PRI",
+          "extra": ""
+        },
+        {
+          "name": "head_office_id",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "PRI",
+          "extra": ""
+        },
+        {
+          "name": "c_seq",
+          "type": "int",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "contact_post",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "c_date",
+          "type": "datetime",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "c_answer",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "c_answerdate",
+          "type": "datetime",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "c_status",
+          "type": "tinyint",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "comment_seq",
+          "type": "int",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "level",
+          "type": "int",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        }
+      ],
+      "indexes": [
+        {
+          "name": "fk_customer_has_head_office_customer1_idx",
+          "non_unique": 1,
+          "column_name": "customer_customer_id",
+          "position": 1
+        },
+        {
+          "name": "fk_customer_has_head_office_head_office2_idx",
+          "non_unique": 1,
+          "column_name": "head_office_id",
+          "position": 1
+        },
+        {
+          "name": "PRIMARY",
+          "non_unique": 0,
+          "column_name": "customer_customer_id",
+          "position": 1
+        },
+        {
+          "name": "PRIMARY",
+          "non_unique": 0,
+          "column_name": "head_office_id",
+          "position": 2
+        }
+      ],
+      "foreign_keys": [
+        {
+          "column_name": "customer_customer_id",
+          "target_table": "customer",
+          "target_column": "customer_id"
+        },
+        {
+          "column_name": "head_office_id",
+          "target_table": "head_office",
+          "target_column": "id"
+        }
+      ],
+      "fingerprint": "fa40f57df705b84d7a367ccfe9729054e4266ceb7abdbdd85f5495a838199195"
+    },
+    "contract": {
+      "rows": 5,
+      "columns": [
+        {
+          "name": "head_office_id",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "PRI",
+          "extra": ""
+        },
+        {
+          "name": "model_id",
+          "type": "int",
+          "nullable": "NO",
+          "key_type": "PRI",
+          "extra": ""
+        },
+        {
+          "name": "contraction_c_seq",
+          "type": "int",
+          "nullable": "NO",
+          "key_type": "PRI",
+          "extra": ""
+        },
+        {
+          "name": "c_date",
+          "type": "datetime",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        }
+      ],
+      "indexes": [
+        {
+          "name": "fk_contract_contraction1_idx",
+          "non_unique": 1,
+          "column_name": "contraction_c_seq",
+          "position": 1
+        },
+        {
+          "name": "fk_head_office_has_model1_head_office1_idx",
+          "non_unique": 1,
+          "column_name": "head_office_id",
+          "position": 1
+        },
+        {
+          "name": "fk_head_office_has_model1_model1_idx",
+          "non_unique": 1,
+          "column_name": "model_id",
+          "position": 1
+        },
+        {
+          "name": "PRIMARY",
+          "non_unique": 0,
+          "column_name": "head_office_id",
+          "position": 1
+        },
+        {
+          "name": "PRIMARY",
+          "non_unique": 0,
+          "column_name": "model_id",
+          "position": 2
+        },
+        {
+          "name": "PRIMARY",
+          "non_unique": 0,
+          "column_name": "contraction_c_seq",
+          "position": 3
+        }
+      ],
+      "foreign_keys": [
+        {
+          "column_name": "contraction_c_seq",
+          "target_table": "contraction",
+          "target_column": "c_seq"
+        },
+        {
+          "column_name": "head_office_id",
+          "target_table": "head_office",
+          "target_column": "id"
+        },
+        {
+          "column_name": "model_id",
+          "target_table": "model",
+          "target_column": "id"
+        }
+      ],
+      "fingerprint": "7d23331d6a575a37a9ace52ebc9f8f7341c00c740e9b58c94ee19f2b94471567"
+    },
+    "contraction": {
+      "rows": 4,
+      "columns": [
+        {
+          "name": "c_seq",
+          "type": "int",
+          "nullable": "NO",
+          "key_type": "PRI",
+          "extra": "auto_increment"
+        },
+        {
+          "name": "start_date",
+          "type": "datetime",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "end_date",
+          "type": "datetime",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "contraction_fee",
+          "type": "int",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "c_option",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        }
+      ],
+      "indexes": [
+        {
+          "name": "PRIMARY",
+          "non_unique": 0,
+          "column_name": "c_seq",
+          "position": 1
+        }
+      ],
+      "foreign_keys": [],
+      "fingerprint": "f3befea176bff2ad727b4c13b3ecd68c73ae02f473dea4eee09dbb61995bce21"
+    },
+    "coupon": {
+      "rows": 3,
+      "columns": [
+        {
+          "name": "coupon_id",
+          "type": "int",
+          "nullable": "NO",
+          "key_type": "PRI",
+          "extra": ""
+        },
+        {
+          "name": "name",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "discount_type",
+          "type": "varchar(10)",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "discount_value",
+          "type": "int",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "description",
+          "type": "varchar(100)",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "condition_type",
+          "type": "varchar(12)",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "valid_days",
+          "type": "int",
+          "nullable": "YES",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "event_start",
+          "type": "datetime",
+          "nullable": "YES",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "event_end",
+          "type": "datetime",
+          "nullable": "YES",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "locked_badge",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        }
+      ],
+      "indexes": [
+        {
+          "name": "PRIMARY",
+          "non_unique": 0,
+          "column_name": "coupon_id",
+          "position": 1
+        }
+      ],
+      "foreign_keys": [],
+      "fingerprint": "1de5ba3bdaa0389983c2f55384efc274aaf5cda4ac25106b72fb423a23c2947f"
+    },
+    "customer": {
+      "rows": 9,
+      "columns": [
+        {
+          "name": "customer_id",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "PRI",
+          "extra": ""
+        },
+        {
+          "name": "password",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "phone",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "name",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "gender",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "address",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "age",
+          "type": "int",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "totalprice",
+          "type": "int",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        }
+      ],
+      "indexes": [
+        {
+          "name": "PRIMARY",
+          "non_unique": 0,
+          "column_name": "customer_id",
+          "position": 1
+        }
+      ],
+      "foreign_keys": [],
+      "fingerprint": "12f3c04fbb9a0d81ea90f6a081a797e1a2ad2e7f6a44a4e5543c73002a2b0bd1"
+    },
+    "customer_coupon": {
+      "rows": 2,
+      "columns": [
+        {
+          "name": "customer_id",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "PRI",
+          "extra": ""
+        },
+        {
+          "name": "coupon_id",
+          "type": "int",
+          "nullable": "NO",
+          "key_type": "PRI",
+          "extra": ""
+        },
+        {
+          "name": "issued_at",
+          "type": "datetime",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": "DEFAULT_GENERATED"
+        },
+        {
+          "name": "expires_at",
+          "type": "datetime",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "used_at",
+          "type": "datetime",
+          "nullable": "YES",
+          "key_type": "",
+          "extra": ""
+        }
+      ],
+      "indexes": [
+        {
+          "name": "PRIMARY",
+          "non_unique": 0,
+          "column_name": "customer_id",
+          "position": 1
+        },
+        {
+          "name": "PRIMARY",
+          "non_unique": 0,
+          "column_name": "coupon_id",
+          "position": 2
+        }
+      ],
+      "foreign_keys": [],
+      "fingerprint": "c0e4d14492122c900fb16903c891e7d92e984380378ac3cd988da8b4507de6a8"
+    },
+    "customer_setting": {
+      "rows": 1,
+      "columns": [
+        {
+          "name": "customer_id",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "PRI",
+          "extra": ""
+        },
+        {
+          "name": "shoe_size",
+          "type": "int",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "default_payment",
+          "type": "varchar(20)",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "favorite_dealer_seq",
+          "type": "int",
+          "nullable": "YES",
+          "key_type": "",
+          "extra": ""
+        }
+      ],
+      "indexes": [
+        {
+          "name": "PRIMARY",
+          "non_unique": 0,
+          "column_name": "customer_id",
+          "position": 1
+        }
+      ],
+      "foreign_keys": [],
+      "fingerprint": "f18d83a0766a028131fdf53694776355a283e52173602a6123bbf60d8ef53a42"
+    },
+    "filming": {
+      "rows": 4,
+      "columns": [
+        {
+          "name": "head_office_id",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "PRI",
+          "extra": ""
+        },
+        {
+          "name": "model_id",
+          "type": "int",
+          "nullable": "NO",
+          "key_type": "PRI",
+          "extra": ""
+        },
+        {
+          "name": "image_seq",
+          "type": "int",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "image",
+          "type": "blob",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        }
+      ],
+      "indexes": [
+        {
+          "name": "fk_head_office_has_model_head_office2_idx",
+          "non_unique": 1,
+          "column_name": "head_office_id",
+          "position": 1
+        },
+        {
+          "name": "fk_head_office_has_model_model2_idx",
+          "non_unique": 1,
+          "column_name": "model_id",
+          "position": 1
+        },
+        {
+          "name": "PRIMARY",
+          "non_unique": 0,
+          "column_name": "head_office_id",
+          "position": 1
+        },
+        {
+          "name": "PRIMARY",
+          "non_unique": 0,
+          "column_name": "model_id",
+          "position": 2
+        }
+      ],
+      "foreign_keys": [
+        {
+          "column_name": "head_office_id",
+          "target_table": "head_office",
+          "target_column": "id"
+        },
+        {
+          "column_name": "model_id",
+          "target_table": "model",
+          "target_column": "id"
+        }
+      ],
+      "fingerprint": "d428adfe9818078d93046b90bf31203176aa17053f750cfd72a1ffd7e40aac58"
+    },
+    "head_office": {
+      "rows": 4,
+      "columns": [
+        {
+          "name": "id",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "PRI",
+          "extra": ""
+        },
+        {
+          "name": "grade",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "division",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        }
+      ],
+      "indexes": [
+        {
+          "name": "PRIMARY",
+          "non_unique": 0,
+          "column_name": "id",
+          "position": 1
+        }
+      ],
+      "foreign_keys": [],
+      "fingerprint": "069452d62f938860a5ae46387432fb4b71d14630f06144d453c9e2750bd9f2c9"
+    },
+    "model": {
+      "rows": 4,
+      "columns": [
+        {
+          "name": "id",
+          "type": "int",
+          "nullable": "NO",
+          "key_type": "PRI",
+          "extra": "auto_increment"
+        },
+        {
+          "name": "name",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "management",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "image",
+          "type": "blob",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "phone",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        }
+      ],
+      "indexes": [
+        {
+          "name": "PRIMARY",
+          "non_unique": 0,
+          "column_name": "id",
+          "position": 1
+        }
+      ],
+      "foreign_keys": [],
+      "fingerprint": "ddc974ed2f9c023b9b2f679cb640f9b1bb9a0c652501a911d2e87e70b0901fb2"
+    },
+    "notice": {
+      "rows": 5,
+      "columns": [
+        {
+          "name": "head_office_id",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "PRI",
+          "extra": ""
+        },
+        {
+          "name": "authorized_dealer_seq",
+          "type": "int",
+          "nullable": "NO",
+          "key_type": "PRI",
+          "extra": ""
+        },
+        {
+          "name": "seq",
+          "type": "int",
+          "nullable": "NO",
+          "key_type": "PRI",
+          "extra": "auto_increment"
+        },
+        {
+          "name": "category",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "title",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "content",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "savedate",
+          "type": "datetime",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        }
+      ],
+      "indexes": [
+        {
+          "name": "fk_head_office_has_authorized_dealer_authorized_dealer2_idx",
+          "non_unique": 1,
+          "column_name": "authorized_dealer_seq",
+          "position": 1
+        },
+        {
+          "name": "fk_head_office_has_authorized_dealer_head_office2_idx",
+          "non_unique": 1,
+          "column_name": "head_office_id",
+          "position": 1
+        },
+        {
+          "name": "PRIMARY",
+          "non_unique": 0,
+          "column_name": "seq",
+          "position": 1
+        },
+        {
+          "name": "PRIMARY",
+          "non_unique": 0,
+          "column_name": "head_office_id",
+          "position": 2
+        },
+        {
+          "name": "PRIMARY",
+          "non_unique": 0,
+          "column_name": "authorized_dealer_seq",
+          "position": 3
+        }
+      ],
+      "foreign_keys": [
+        {
+          "column_name": "authorized_dealer_seq",
+          "target_table": "authorized_dealer",
+          "target_column": "seq"
+        },
+        {
+          "column_name": "head_office_id",
+          "target_table": "head_office",
+          "target_column": "id"
+        }
+      ],
+      "fingerprint": "9bdf17910fa29f607a283205402decc7ebba688de0c4de6fa8eff9ca7312b640"
+    },
+    "option": {
+      "rows": 3,
+      "columns": [
+        {
+          "name": "head_office_id",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "PRI",
+          "extra": ""
+        },
+        {
+          "name": "banner_image_seq",
+          "type": "int",
+          "nullable": "NO",
+          "key_type": "PRI",
+          "extra": ""
+        },
+        {
+          "name": "image_seq",
+          "type": "int",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "start_date",
+          "type": "datetime",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "end_date",
+          "type": "datetime",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        }
+      ],
+      "indexes": [
+        {
+          "name": "fk_head_office_has_banner_image_banner_image1_idx",
+          "non_unique": 1,
+          "column_name": "banner_image_seq",
+          "position": 1
+        },
+        {
+          "name": "fk_head_office_has_banner_image_head_office1_idx",
+          "non_unique": 1,
+          "column_name": "head_office_id",
+          "position": 1
+        },
+        {
+          "name": "PRIMARY",
+          "non_unique": 0,
+          "column_name": "head_office_id",
+          "position": 1
+        },
+        {
+          "name": "PRIMARY",
+          "non_unique": 0,
+          "column_name": "banner_image_seq",
+          "position": 2
+        }
+      ],
+      "foreign_keys": [
+        {
+          "column_name": "banner_image_seq",
+          "target_table": "banner_image",
+          "target_column": "seq"
+        },
+        {
+          "column_name": "head_office_id",
+          "target_table": "head_office",
+          "target_column": "id"
+        }
+      ],
+      "fingerprint": "d210a2d6d6e6152b9702f9aa25900a59ad92a44d89452a227f1c392fdf7ddc98"
+    },
+    "p_return": {
+      "rows": 3,
+      "columns": [
+        {
+          "name": "customer_customer_id",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "PRI",
+          "extra": ""
+        },
+        {
+          "name": "authorized_dealer_seq",
+          "type": "int",
+          "nullable": "NO",
+          "key_type": "PRI",
+          "extra": ""
+        },
+        {
+          "name": "p_id",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "reason",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "p_date",
+          "type": "datetime",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "refund",
+          "type": "tinyint",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "staff_id",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "image",
+          "type": "blob",
+          "nullable": "YES",
+          "key_type": "",
+          "extra": ""
+        }
+      ],
+      "indexes": [
+        {
+          "name": "fk_customer_has_authorized_dealer_authorized_dealer2_idx",
+          "non_unique": 1,
+          "column_name": "authorized_dealer_seq",
+          "position": 1
+        },
+        {
+          "name": "fk_customer_has_authorized_dealer_customer2_idx",
+          "non_unique": 1,
+          "column_name": "customer_customer_id",
+          "position": 1
+        },
+        {
+          "name": "PRIMARY",
+          "non_unique": 0,
+          "column_name": "customer_customer_id",
+          "position": 1
+        },
+        {
+          "name": "PRIMARY",
+          "non_unique": 0,
+          "column_name": "authorized_dealer_seq",
+          "position": 2
+        }
+      ],
+      "foreign_keys": [
+        {
+          "column_name": "authorized_dealer_seq",
+          "target_table": "authorized_dealer",
+          "target_column": "seq"
+        },
+        {
+          "column_name": "customer_customer_id",
+          "target_table": "customer",
+          "target_column": "customer_id"
+        }
+      ],
+      "fingerprint": "8a5149e4dee3e6e48da22c175555637ccf1e181e7e0a7ebef51c6e4e9be89c7b"
+    },
+    "pickup": {
+      "rows": 4,
+      "columns": [
+        {
+          "name": "customer_customer_id",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "PRI",
+          "extra": ""
+        },
+        {
+          "name": "authorized_dealer_seq",
+          "type": "int",
+          "nullable": "NO",
+          "key_type": "PRI",
+          "extra": ""
+        },
+        {
+          "name": "staff_id",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "pickup_id",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "pickup_date",
+          "type": "datetime",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        }
+      ],
+      "indexes": [
+        {
+          "name": "fk_customer_has_authorized_dealer_authorized_dealer1_idx",
+          "non_unique": 1,
+          "column_name": "authorized_dealer_seq",
+          "position": 1
+        },
+        {
+          "name": "fk_customer_has_authorized_dealer_customer1_idx",
+          "non_unique": 1,
+          "column_name": "customer_customer_id",
+          "position": 1
+        },
+        {
+          "name": "PRIMARY",
+          "non_unique": 0,
+          "column_name": "customer_customer_id",
+          "position": 1
+        },
+        {
+          "name": "PRIMARY",
+          "non_unique": 0,
+          "column_name": "authorized_dealer_seq",
+          "position": 2
+        }
+      ],
+      "foreign_keys": [
+        {
+          "column_name": "authorized_dealer_seq",
+          "target_table": "authorized_dealer",
+          "target_column": "seq"
+        },
+        {
+          "column_name": "customer_customer_id",
+          "target_table": "customer",
+          "target_column": "customer_id"
+        }
+      ],
+      "fingerprint": "a2150116c3df457dc38820e0eef815c30d7a852f50b7a5319b555e2785279c3c"
+    },
+    "product": {
+      "rows": 11,
+      "columns": [
+        {
+          "name": "p_code",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "PRI",
+          "extra": ""
+        },
+        {
+          "name": "p_name",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "b_name",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "p_price",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "p_image",
+          "type": "blob",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "p_sku",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "p_gender",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "p_size",
+          "type": "int",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "p_color",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        }
+      ],
+      "indexes": [
+        {
+          "name": "PRIMARY",
+          "non_unique": 0,
+          "column_name": "p_code",
+          "position": 1
+        }
+      ],
+      "foreign_keys": [],
+      "fingerprint": "399ebddf258d408b0f1c0ad2e0009ceb2dbec8e006ef0eae2d4cddc891ea722f"
+    },
+    "purchase": {
+      "rows": 6,
+      "columns": [
+        {
+          "name": "customer_customer_id",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "PRI",
+          "extra": ""
+        },
+        {
+          "name": "head_office_id",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "PRI",
+          "extra": ""
+        },
+        {
+          "name": "p_code",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "p_date",
+          "type": "datetime",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "p_price",
+          "type": "int",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        }
+      ],
+      "indexes": [
+        {
+          "name": "fk_customer_has_head_office_customer_idx",
+          "non_unique": 1,
+          "column_name": "customer_customer_id",
+          "position": 1
+        },
+        {
+          "name": "fk_customer_has_head_office_head_office1_idx",
+          "non_unique": 1,
+          "column_name": "head_office_id",
+          "position": 1
+        },
+        {
+          "name": "PRIMARY",
+          "non_unique": 0,
+          "column_name": "customer_customer_id",
+          "position": 1
+        },
+        {
+          "name": "PRIMARY",
+          "non_unique": 0,
+          "column_name": "head_office_id",
+          "position": 2
+        }
+      ],
+      "foreign_keys": [
+        {
+          "column_name": "customer_customer_id",
+          "target_table": "customer",
+          "target_column": "customer_id"
+        },
+        {
+          "column_name": "head_office_id",
+          "target_table": "head_office",
+          "target_column": "id"
+        }
+      ],
+      "fingerprint": "6c814d05cc9394361ba82f218a9c6d68111f8852317dc30c28cfa1ec9ac11b06"
+    },
+    "recently_viewed": {
+      "rows": 0,
+      "columns": [
+        {
+          "name": "customer_id",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "PRI",
+          "extra": ""
+        },
+        {
+          "name": "p_code",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "PRI",
+          "extra": ""
+        },
+        {
+          "name": "viewed_at",
+          "type": "datetime",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": "DEFAULT_GENERATED"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "PRIMARY",
+          "non_unique": 0,
+          "column_name": "customer_id",
+          "position": 1
+        },
+        {
+          "name": "PRIMARY",
+          "non_unique": 0,
+          "column_name": "p_code",
+          "position": 2
+        }
+      ],
+      "foreign_keys": [],
+      "fingerprint": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "return": {
+      "rows": 4,
+      "columns": [
+        {
+          "name": "head_office_id",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "PRI",
+          "extra": ""
+        },
+        {
+          "name": "authorized_dealer_seq",
+          "type": "int",
+          "nullable": "NO",
+          "key_type": "PRI",
+          "extra": ""
+        },
+        {
+          "name": "staff_id",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "return_id",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "return_date",
+          "type": "datetime",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "quantity",
+          "type": "int",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        }
+      ],
+      "indexes": [
+        {
+          "name": "fk_head_office_has_authorized_dealer_authorized_dealer1_idx",
+          "non_unique": 1,
+          "column_name": "authorized_dealer_seq",
+          "position": 1
+        },
+        {
+          "name": "fk_head_office_has_authorized_dealer_head_office1_idx",
+          "non_unique": 1,
+          "column_name": "head_office_id",
+          "position": 1
+        },
+        {
+          "name": "PRIMARY",
+          "non_unique": 0,
+          "column_name": "head_office_id",
+          "position": 1
+        },
+        {
+          "name": "PRIMARY",
+          "non_unique": 0,
+          "column_name": "authorized_dealer_seq",
+          "position": 2
+        }
+      ],
+      "foreign_keys": [
+        {
+          "column_name": "authorized_dealer_seq",
+          "target_table": "authorized_dealer",
+          "target_column": "seq"
+        },
+        {
+          "column_name": "head_office_id",
+          "target_table": "head_office",
+          "target_column": "id"
+        }
+      ],
+      "fingerprint": "a9ad2905d5a3f2908e0e04df5d3aad7aeb110bcfbec3ea0b6363f57fd9a66987"
+    },
+    "review": {
+      "rows": 5,
+      "columns": [
+        {
+          "name": "customer_customer_id",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "PRI",
+          "extra": ""
+        },
+        {
+          "name": "product_p_code",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "PRI",
+          "extra": ""
+        },
+        {
+          "name": "review_seq",
+          "type": "int",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "r_date",
+          "type": "datetime",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "image",
+          "type": "blob",
+          "nullable": "YES",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "context",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "r_fit",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "rating",
+          "type": "float",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "likecount",
+          "type": "int",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        }
+      ],
+      "indexes": [
+        {
+          "name": "fk_customer_has_product_customer2_idx",
+          "non_unique": 1,
+          "column_name": "customer_customer_id",
+          "position": 1
+        },
+        {
+          "name": "fk_customer_has_product_product2_idx",
+          "non_unique": 1,
+          "column_name": "product_p_code",
+          "position": 1
+        },
+        {
+          "name": "PRIMARY",
+          "non_unique": 0,
+          "column_name": "customer_customer_id",
+          "position": 1
+        },
+        {
+          "name": "PRIMARY",
+          "non_unique": 0,
+          "column_name": "product_p_code",
+          "position": 2
+        }
+      ],
+      "foreign_keys": [
+        {
+          "column_name": "customer_customer_id",
+          "target_table": "customer",
+          "target_column": "customer_id"
+        },
+        {
+          "column_name": "product_p_code",
+          "target_table": "product",
+          "target_column": "p_code"
+        }
+      ],
+      "fingerprint": "a21f757114db00ade67a7ddd2443657c0c4a13c58632120d9f8a99bfee399966"
+    },
+    "termination": {
+      "rows": 2,
+      "columns": [
+        {
+          "name": "head_office_id",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "PRI",
+          "extra": ""
+        },
+        {
+          "name": "model_id",
+          "type": "int",
+          "nullable": "NO",
+          "key_type": "PRI",
+          "extra": ""
+        },
+        {
+          "name": "t_seq",
+          "type": "int",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "t_date",
+          "type": "datetime",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        },
+        {
+          "name": "termination_fee",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": ""
+        }
+      ],
+      "indexes": [
+        {
+          "name": "fk_head_office_has_model_head_office1_idx",
+          "non_unique": 1,
+          "column_name": "head_office_id",
+          "position": 1
+        },
+        {
+          "name": "fk_head_office_has_model_model1_idx",
+          "non_unique": 1,
+          "column_name": "model_id",
+          "position": 1
+        },
+        {
+          "name": "PRIMARY",
+          "non_unique": 0,
+          "column_name": "head_office_id",
+          "position": 1
+        },
+        {
+          "name": "PRIMARY",
+          "non_unique": 0,
+          "column_name": "model_id",
+          "position": 2
+        }
+      ],
+      "foreign_keys": [
+        {
+          "column_name": "head_office_id",
+          "target_table": "head_office",
+          "target_column": "id"
+        },
+        {
+          "column_name": "model_id",
+          "target_table": "model",
+          "target_column": "id"
+        }
+      ],
+      "fingerprint": "e320e8175d9c906ba7d19f88cac91b3e69839b31d588909ec4af9c9b209dddc1"
+    },
+    "wishlist": {
+      "rows": 0,
+      "columns": [
+        {
+          "name": "customer_id",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "PRI",
+          "extra": ""
+        },
+        {
+          "name": "p_code",
+          "type": "varchar(45)",
+          "nullable": "NO",
+          "key_type": "PRI",
+          "extra": ""
+        },
+        {
+          "name": "created_at",
+          "type": "datetime",
+          "nullable": "NO",
+          "key_type": "",
+          "extra": "DEFAULT_GENERATED"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "PRIMARY",
+          "non_unique": 0,
+          "column_name": "customer_id",
+          "position": 1
+        },
+        {
+          "name": "PRIMARY",
+          "non_unique": 0,
+          "column_name": "p_code",
+          "position": 2
+        }
+      ],
+      "foreign_keys": [],
+      "fingerprint": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    }
+  },
+  "firestore": {
+    "account": {
+      "rows": 6,
+      "fields": {
+        "address": {
+          "present": 6,
+          "null": 0
+        },
+        "email": {
+          "present": 6,
+          "null": 0
+        },
+        "firebaseUid": {
+          "present": 1,
+          "null": 0
+        },
+        "gender": {
+          "present": 6,
+          "null": 0
+        },
+        "name": {
+          "present": 6,
+          "null": 0
+        },
+        "password": {
+          "present": 5,
+          "null": 0
+        },
+        "phoneNumber": {
+          "present": 6,
+          "null": 0
+        },
+        "shoeSize": {
+          "present": 6,
+          "null": 6
+        },
+        "signupPath": {
+          "present": 6,
+          "null": 0
+        }
+      }
+    },
+    "change": {
+      "rows": 1,
+      "fields": {
+        "changedAt": {
+          "present": 1,
+          "null": 0
+        },
+        "email": {
+          "present": 1,
+          "null": 0
+        },
+        "employeeId": {
+          "present": 1,
+          "null": 0
+        }
+      }
+    },
+    "connect": {
+      "rows": 1,
+      "fields": {
+        "accessLocation": {
+          "present": 1,
+          "null": 0
+        },
+        "connectedAt": {
+          "present": 1,
+          "null": 0
+        },
+        "email": {
+          "present": 1,
+          "null": 0
+        },
+        "employeeId": {
+          "present": 1,
+          "null": 0
+        },
+        "ipAddress": {
+          "present": 1,
+          "null": 0
+        }
+      }
+    },
+    "distributor_inventory": {
+      "rows": 1,
+      "fields": {
+        "branchName": {
+          "present": 1,
+          "null": 0
+        },
+        "productId": {
+          "present": 1,
+          "null": 0
+        },
+        "quantity": {
+          "present": 1,
+          "null": 0
+        }
+      }
+    },
+    "employee": {
+      "rows": 2,
+      "fields": {
+        "businessNumber": {
+          "present": 1,
+          "null": 0
+        },
+        "demo": {
+          "present": 1,
+          "null": 0
+        },
+        "department": {
+          "present": 2,
+          "null": 0
+        },
+        "email": {
+          "present": 1,
+          "null": 0
+        },
+        "employeeId": {
+          "present": 2,
+          "null": 0
+        },
+        "password": {
+          "present": 1,
+          "null": 0
+        },
+        "position": {
+          "present": 2,
+          "null": 0
+        }
+      }
+    },
+    "manufactor": {
+      "rows": 1,
+      "fields": {
+        "address": {
+          "present": 1,
+          "null": 0
+        },
+        "manufacturerId": {
+          "present": 1,
+          "null": 0
+        },
+        "manufacturerName": {
+          "present": 1,
+          "null": 0
+        }
+      }
+    },
+    "office_inventory": {
+      "rows": 1,
+      "fields": {
+        "minimumQuantity": {
+          "present": 1,
+          "null": 0
+        },
+        "productId": {
+          "present": 1,
+          "null": 0
+        }
+      }
+    },
+    "order": {
+      "rows": 1,
+      "fields": {
+        "employeeId": {
+          "present": 1,
+          "null": 0
+        },
+        "manufacturerId": {
+          "present": 1,
+          "null": 0
+        },
+        "orderedAt": {
+          "present": 1,
+          "null": 0
+        },
+        "productId": {
+          "present": 1,
+          "null": 0
+        },
+        "quantity": {
+          "present": 1,
+          "null": 0
+        },
+        "quotationSeq": {
+          "present": 1,
+          "null": 0
+        }
+      }
+    },
+    "quotation": {
+      "rows": 1,
+      "fields": {
+        "managerName": {
+          "present": 1,
+          "null": 0
+        },
+        "productName": {
+          "present": 1,
+          "null": 0
+        },
+        "quantity": {
+          "present": 1,
+          "null": 0
+        },
+        "quotedAt": {
+          "present": 1,
+          "null": 0
+        },
+        "seq": {
+          "present": 1,
+          "null": 0
+        },
+        "supplyPrice": {
+          "present": 1,
+          "null": 0
+        },
+        "unitPrice": {
+          "present": 1,
+          "null": 0
+        }
+      }
+    },
+    "recieve": {
+      "rows": 1,
+      "fields": {
+        "employeeId": {
+          "present": 1,
+          "null": 0
+        },
+        "manufacturerId": {
+          "present": 1,
+          "null": 0
+        },
+        "productId": {
+          "present": 1,
+          "null": 0
+        },
+        "quantity": {
+          "present": 1,
+          "null": 0
+        },
+        "receivedAt": {
+          "present": 1,
+          "null": 0
+        }
+      }
+    },
+    "registration": {
+      "rows": 1,
+      "fields": {
+        "brandName": {
+          "present": 1,
+          "null": 0
+        },
+        "employeeId": {
+          "present": 1,
+          "null": 0
+        },
+        "productId": {
+          "present": 1,
+          "null": 0
+        },
+        "quantity": {
+          "present": 1,
+          "null": 0
+        },
+        "registeredAt": {
+          "present": 1,
+          "null": 0
+        }
+      }
+    },
+    "resister": {
+      "rows": 1,
+      "fields": {
+        "email": {
+          "present": 1,
+          "null": 0
+        },
+        "employeeId": {
+          "present": 1,
+          "null": 0
+        },
+        "registeredAt": {
+          "present": 1,
+          "null": 0
+        }
+      }
+    },
+    "send": {
+      "rows": 1,
+      "fields": {
+        "branchName": {
+          "present": 1,
+          "null": 0
+        },
+        "employeeId": {
+          "present": 1,
+          "null": 0
+        },
+        "isReceived": {
+          "present": 1,
+          "null": 0
+        },
+        "quantity": {
+          "present": 1,
+          "null": 0
+        },
+        "sentAt": {
+          "present": 1,
+          "null": 0
+        }
+      }
+    }
+  },
+  "identity": {
+    "auth_users": 1,
+    "auth_link_missing": 5,
+    "shared_accounts": 3,
+    "missing_mysql": 3,
+    "missing_firestore": 6,
+    "duplicate_emails_case_insensitive": 0,
+    "profile_mismatches": {
+      "name": 3,
+      "phoneNumber": 3,
+      "gender": 3,
+      "address": 3
+    },
+    "customer_password_nonempty": 6,
+    "account_legacy_password_fields": 5,
+    "account_missing_shoe_size": 6
+  },
+  "employee_relations": {
+    "missing_auth_link": 2,
+    "unknown_head_office_id": 2,
+    "password_fields": 1
+  },
+  "mysql_relations": {
+    "customer_without_settings": 8,
+    "purchase_unknown_product": 0,
+    "return_unknown_product": 0,
+    "duplicate_owner_review_id": 0
+  },
+  "product_relations": {
+    "office_inventory": {
+      "missing_product_id": 0,
+      "unknown_product_id": 1
+    },
+    "distributor_inventory": {
+      "missing_product_id": 0,
+      "unknown_product_id": 1
+    },
+    "registration": {
+      "missing_product_id": 0,
+      "unknown_product_id": 1
+    },
+    "order": {
+      "missing_product_id": 0,
+      "unknown_product_id": 1
+    },
+    "recieve": {
+      "missing_product_id": 0,
+      "unknown_product_id": 1
+    },
+    "quotation": {
+      "missing_product_id": 1,
+      "unknown_product_id": 0
+    },
+    "send": {
+      "missing_product_id": 1,
+      "unknown_product_id": 0
+    }
+  }
+}

@@ -1,6 +1,8 @@
 import 'package:bootcamp_teamproject_1/discover/discover_api.dart';
 import 'package:bootcamp_teamproject_1/discover/size_selection_page.dart';
 import 'package:flutter/material.dart';
+import 'package:bootcamp_teamproject_1/services/mypage_api.dart';
+import 'package:bootcamp_teamproject_1/user/authController.dart';
 
 class ProductDetailPage extends StatefulWidget {
   const ProductDetailPage({super.key, required this.productCode});
@@ -12,12 +14,31 @@ class ProductDetailPage extends StatefulWidget {
 class _ProductDetailPageState extends State<ProductDetailPage> {
   final _api = DiscoverApi();
   late Future<DiscoverProduct> _future;
+  Future<List<Map<String, dynamic>>>? _reviews;
+  String? _historyError;
   String? _color;
   int? _size;
   @override
   void initState() {
     super.initState();
     _future = _api.product(widget.productCode);
+    _recordView();
+  }
+
+  @override
+  void dispose() {
+    _api.dispose();
+    super.dispose();
+  }
+
+  Future<void> _recordView() async {
+    final email = AuthController.to.customerId.value;
+    if (email == null) return;
+    try {
+      await MyPageApi.recordView(email, widget.productCode);
+    } catch (_) {
+      if (mounted) setState(() => _historyError = '최근 본 상품 기록을 저장하지 못했습니다.');
+    }
   }
 
   @override
@@ -28,9 +49,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     body: FutureBuilder<DiscoverProduct>(
       future: _future,
       builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done)
+        if (snapshot.connectionState != ConnectionState.done) {
           return const Center(child: CircularProgressIndicator());
-        if (snapshot.hasError)
+        }
+        if (snapshot.hasError) {
           return Center(
             child: OutlinedButton(
               onPressed: () =>
@@ -38,15 +60,31 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
               child: const Text('상품 다시 불러오기'),
             ),
           );
+        }
         return _content(snapshot.data!);
       },
     ),
   );
 
   Widget _content(DiscoverProduct product) {
-    _color ??= product.colors.isNotEmpty ? product.colors.first : product.color;
-    _size ??= product.sizes.isNotEmpty ? product.sizes.first : product.size;
-    final image = _api.imageUrl(product);
+    // 리뷰를 표시할 때 요청해 오류가 FutureBuilder 밖으로 누락되지 않게 한다.
+    _reviews ??= _api.reviews(widget.productCode);
+    _color ??= product.color;
+    _size ??= product.size;
+    final variants = product.variants.isEmpty ? [product] : product.variants;
+    final sizes =
+        variants
+            .where((v) => v.color == _color && v.size != null)
+            .map((v) => v.size!)
+            .toSet()
+            .toList()
+          ..sort();
+    if (!sizes.contains(_size)) _size = sizes.isEmpty ? null : sizes.first;
+    final matches = variants
+        .where((v) => v.color == _color && v.size == _size)
+        .toList();
+    final selected = matches.length == 1 ? matches.single : null;
+    final image = _api.imageUrl(selected ?? product);
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
@@ -67,7 +105,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           style: const TextStyle(fontSize: 27, fontWeight: FontWeight.w900),
         ),
         Text(
-          '₩${product.price}',
+          '₩${(selected ?? product).price}',
           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
         ),
         const SizedBox(height: 24),
@@ -75,20 +113,23 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         _options(
           product.colors,
           _color,
-          (value) => setState(() => _color = value),
+          (value) => setState(() {
+            _color = value;
+            _size = null;
+          }),
           product.optionNotice,
         ),
         const SizedBox(height: 20),
         const Text('구매 사이즈', style: TextStyle(fontWeight: FontWeight.w900)),
-        _sizeOptions(product.sizes, product.optionNotice),
+        _sizeOptions(sizes, product.optionNotice),
         const SizedBox(height: 28),
         FilledButton(
-          onPressed: (_color == null && _size == null)
+          onPressed: selected == null || _color == null || _size == null
               ? null
               : () => Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) => SizeSelectionPage(
-                      product: product,
+                      product: selected,
                       selectedColor: _color,
                       selectedSize: _size,
                     ),
@@ -98,9 +139,32 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         ),
         const SizedBox(height: 18),
         const Text('구매 리뷰', style: TextStyle(fontWeight: FontWeight.w900)),
-        const Text(
-          '리뷰는 등록된 구매 데이터만 표시됩니다. 현재 DB에는 리뷰가 없습니다.',
-          style: TextStyle(fontSize: 12, color: Color(0xFF6E675F)),
+        if (_historyError != null) Text(_historyError!),
+        FutureBuilder<List<Map<String, dynamic>>>(
+          future: _reviews,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const LinearProgressIndicator();
+            }
+            if (snapshot.hasError) {
+              return TextButton(
+                onPressed: () =>
+                    setState(() => _reviews = _api.reviews(widget.productCode)),
+                child: const Text('리뷰 다시 불러오기'),
+              );
+            }
+            final reviews = snapshot.data ?? [];
+            if (reviews.isEmpty) return const Text('등록된 구매 리뷰가 없습니다.');
+            return Column(
+              children: [
+                for (final review in reviews)
+                  ListTile(
+                    title: Text('${review['content']}'),
+                    subtitle: Text('평점 ${review['rating']} · ${review['fit']}'),
+                  ),
+              ],
+            );
+          },
         ),
       ],
     );
@@ -112,11 +176,12 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     ValueChanged<String> select,
     String? notice,
   ) {
-    if (values.isEmpty)
+    if (values.isEmpty) {
       return Padding(
         padding: const EdgeInsets.only(top: 8),
         child: Text(notice ?? '등록된 옵션이 없습니다.'),
       );
+    }
     return Wrap(
       spacing: 8,
       children: [
@@ -131,11 +196,12 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   }
 
   Widget _sizeOptions(List<int> values, String? notice) {
-    if (values.isEmpty)
+    if (values.isEmpty) {
       return Padding(
         padding: const EdgeInsets.only(top: 8),
         child: Text(notice ?? '등록된 옵션이 없습니다.'),
       );
+    }
     return Wrap(
       spacing: 8,
       children: [

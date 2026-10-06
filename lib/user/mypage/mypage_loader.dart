@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 
 import 'package:bootcamp_teamproject_1/user/authController.dart';
 
@@ -19,11 +20,22 @@ class MpLoader<T> extends StatefulWidget {
 
 class _MpLoaderState<T> extends State<MpLoader<T>> {
   Future<T>? _future;
+  late final Worker _accountWorker;
 
   @override
   void initState() {
     super.initState();
     _reload();
+    // 로그인 계정이 바뀌면 이전 계정의 화면 데이터를 폐기하고 다시 조회한다.
+    _accountWorker = ever(AuthController.to.customerId, (_) {
+      if (mounted) setState(_reload);
+    });
+  }
+
+  @override
+  void dispose() {
+    _accountWorker.dispose();
+    super.dispose();
   }
 
   void _reload() {
@@ -58,6 +70,7 @@ class _MpLoaderState<T> extends State<MpLoader<T>> {
     final future = _future;
     if (future == null) return _message('로그인이 필요합니다.');
     return FutureBuilder<T>(
+      key: ValueKey(AuthController.to.customerId.value),
       future: future,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {

@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from .commerce import get_commerce
 from .dependencies import current_email
 from .schemas import ReviewCreate, ReviewOut, ReviewableOut, Page
+from .schema_guard import require_schema
 
 router = APIRouter(tags=['2. 리뷰작성'])
 
@@ -18,4 +19,6 @@ def reviewable(limit: int = Query(20, ge=1, le=100), offset: int = Query(0, ge=0
 @router.post('/reviews', status_code=201, response_model=ReviewOut)
 def write_review(data: ReviewCreate, email=Depends(current_email), commerce=Depends(get_commerce)):
     # 상품 코드/내용/별점/핏을 받아 구매와 중복을 트랜잭션에서 확인하고 저장한다.
+    require_schema('review', ['review_seq', 'context'], auto_increment='review_seq',
+                   text_lengths={'context': len(data.content)})
     return commerce.create_review(email, data)

@@ -2,9 +2,10 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Test-only project: replace with authenticated rules before production.
+    // 앱의 업무 데이터는 검증된 FastAPI(Admin SDK)만 접근한다.
+    // account에는 개인정보가 있으므로 클라이언트의 직접 접근은 기본 차단한다.
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
   }
 }

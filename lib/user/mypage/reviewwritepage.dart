@@ -4,7 +4,7 @@ import 'fitpick_mypage_ui.dart';
 
 /// 09. 리뷰 작성
 ///
-/// 리뷰 저장 모델은 현재 ERD에 정의되어 있지 않으므로 입력 UI와 검증만 제공한다.
+/// MySQL 리뷰/작성 API는 있으나 이 화면은 아직 API를 연결하지 않아 실제 등록되지 않는다.
 class ReviewWritePage extends StatefulWidget {
   const ReviewWritePage({super.key});
 
@@ -26,6 +26,7 @@ class _ReviewWritePageState extends State<ReviewWritePage> {
   void _submit() {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     FocusScope.of(context).unfocus();
+    // 입력값 검증까지만 수행한다. API 호출이나 리뷰 저장은 연결되어 있지 않다.
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('리뷰 데이터 모델 연결 후 등록할 수 있습니다.')));

@@ -36,6 +36,7 @@ void main() {
       client: MockClient((request) async {
         expect(request.url.path, '/api/signup');
         expect(jsonDecode(request.body)['agreed'], isTrue);
+        expect(jsonDecode(request.body)['shoeSize'], 270);
         signupRequests++;
         return http.Response(
           jsonEncode({'accessToken': 'signup-token', 'customerSynced': true}),

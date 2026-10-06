@@ -26,6 +26,7 @@ class SignupInput(LoginInput):
     address: str = Field(min_length=1, max_length=200)
     signupPath: Literal['이메일'] = '이메일'
     age: Optional[int] = Field(default=None, ge=0, le=130)
+    shoeSize: int = Field(ge=220, le=310, multiple_of=5, strict=True)
     agreed: Literal[True]
 
     @field_validator('name', 'address')
@@ -92,6 +93,22 @@ class AccountOut(BaseModel):
     gender: str
     address: str
     signupPath: str
+    age: Optional[int] = None
+    shoeSize: Optional[int] = None
+
+
+class AccountProfilePatch(Input):
+    # 이메일은 Firebase Auth의 식별자이므로 이 화면에서 변경하지 않는다.
+    name: str = Field(min_length=1, max_length=45)
+    phoneNumber: str = Field(pattern=r'^01[0-9]-?[0-9]{3,4}-?[0-9]{4}$')
+    shoeSize: int = Field(ge=220, le=310, multiple_of=5, strict=True)
+
+    @field_validator('name')
+    @classmethod
+    def profile_name_nonblank(cls, value):
+        if not value.strip():
+            raise ValueError('공백만 입력할 수 없습니다.')
+        return value.strip()
 
 
 class SessionOut(BaseModel):

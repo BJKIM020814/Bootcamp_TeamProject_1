@@ -44,7 +44,7 @@ class MpProfile {
 
 /// GET /mypage/summary 응답 (마이페이지 첫 화면).
 class MpSummary {
-  final int shoeSize;
+  final int? shoeSize;
   final String grade;
   final String? favoriteStore;
   final int orderCount;
@@ -61,7 +61,7 @@ class MpSummary {
   });
 
   factory MpSummary.fromJson(Map<String, dynamic> json) => MpSummary(
-    shoeSize: json['shoe_size'] as int,
+    shoeSize: json['shoe_size'] as int?,
     grade: json['grade'] as String,
     favoriteStore: json['favorite_store'] as String?,
     orderCount: json['order_count'] as int,

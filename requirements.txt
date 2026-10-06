@@ -4,5 +4,7 @@ pymysql>=1.1,<2
 cryptography
 python-dotenv>=1,<2
 google-cloud-firestore>=2.19,<3
+firebase-admin>=6.8,<8
+httpx>=0.27,<1
 pwdlib[argon2]>=0.2,<1
 email-validator>=2,<3

@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 import 'api_config.dart';
+import 'fitpick_api_service.dart';
 
 /// 서버 응답 오류 / 연결 실패. message 는 화면에 그대로 보여줄 수 있는 문장이다.
 class ApiException implements Exception {
@@ -29,12 +30,13 @@ class ApiClient {
   static Uri _uri(String path, Map<String, String>? query) =>
       Uri.parse('$baseUrl$path').replace(queryParameters: query);
 
-  static const _jsonHeaders = {
+  static Map<String, String> get _jsonHeaders => {
     'Content-Type': 'application/json; charset=utf-8',
+    ...FitpickApiService.instance.authorizationHeaders,
   };
 
   static Future<dynamic> get(String path, {Map<String, String>? query}) =>
-      _send(() => http.get(_uri(path, query)));
+      _send(() => http.get(_uri(path, query), headers: _jsonHeaders));
 
   static Future<dynamic> post(String path, Map<String, dynamic> body) => _send(
     () => http.post(
@@ -53,7 +55,7 @@ class ApiClient {
   );
 
   static Future<dynamic> delete(String path, {Map<String, String>? query}) =>
-      _send(() => http.delete(_uri(path, query)));
+      _send(() => http.delete(_uri(path, query), headers: _jsonHeaders));
 
   static Future<dynamic> _send(Future<http.Response> Function() request) async {
     final http.Response response;
@@ -66,12 +68,22 @@ class ApiClient {
     }
 
     // 한글이 깨지지 않도록 바이트를 직접 UTF-8 로 해석한다.
-    final text = utf8.decode(response.bodyBytes);
-    final dynamic data = text.isEmpty ? null : jsonDecode(text);
+    if (response.statusCode == 401) FitpickApiService.instance.clearSession();
+    final dynamic data;
+    try {
+      final text = utf8.decode(response.bodyBytes);
+      data = text.isEmpty ? null : jsonDecode(text);
+    } on FormatException {
+      throw ApiException('서버 응답 형식이 올바르지 않습니다.', response.statusCode);
+    }
     if (response.statusCode >= 400) {
       final detail = data is Map ? data['detail'] : null;
       throw ApiException(
-        detail is String ? detail : '요청을 처리하지 못했습니다. (${response.statusCode})',
+        detail is String
+            ? detail
+            : detail is Map && detail['message'] is String
+            ? detail['message'] as String
+            : '요청을 처리하지 못했습니다. (${response.statusCode})',
         response.statusCode,
       );
     }
