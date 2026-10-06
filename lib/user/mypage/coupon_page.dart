@@ -10,9 +10,11 @@ import 'mypage_loader.dart';
 import 'mypage_models.dart';
 import 'mypage_controller.dart';
 
+/// API에서 받은 사용자 쿠폰과 사용 가능 상태를 표시하는 마이페이지 화면.
 class CouponPage extends StatelessWidget {
   const CouponPage({super.key});
 
+  /// 쿠폰 조회 로딩/오류 상태와 공통 마이페이지 내비게이션을 구성한다.
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -26,6 +28,7 @@ class CouponPage extends StatelessWidget {
     );
   }
 
+  /// 등급, 쿠폰 목록, 안내 문구와 상품 탐색 진입 버튼을 배치한다.
   Widget _buildBody(List<MpCoupon> coupons) {
     return ListView(
       padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
@@ -74,6 +77,7 @@ class CouponPage extends StatelessWidget {
     );
   }
 
+  /// 사용 가능 여부와 서버가 제공한 할인·설명·기간을 쿠폰 카드에 표시한다.
   Widget _buildCoupon(MpCoupon c) {
     final bool on = c.available;
     return Opacity(
