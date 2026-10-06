@@ -3,7 +3,7 @@ import 'package:bootcamp_teamproject_1/order/cartPage.dart';
 import 'package:bootcamp_teamproject_1/order/orderApi.dart';
 import 'package:bootcamp_teamproject_1/order/orderCompletePage.dart';
 import 'package:bootcamp_teamproject_1/order/storePickerStub.dart';
-import 'package:bootcamp_teamproject_1/services/account_service.dart';
+import 'package:bootcamp_teamproject_1/services/fitpick_api_service.dart';
 import 'package:bootcamp_teamproject_1/user/authController.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -78,11 +78,15 @@ class _CheckoutpageState extends State<Checkoutpage> {
     final email = AuthController.to.customerId.value;
     if (email == null) return;
     try {
-      final basic = await AccountService.getBasic(email);
+      final account = await FitpickApiService.instance.me();
       if (!mounted) return;
       setState(() {
-        if (_ordererName.isEmpty) _ordererName = basic.name;
-        if (_ordererPhone.isEmpty) _ordererPhone = basic.phone;
+        if (_ordererName.isEmpty) {
+          _ordererName = account['name']?.toString() ?? '';
+        }
+        if (_ordererPhone.isEmpty) {
+          _ordererPhone = account['phoneNumber']?.toString() ?? '';
+        }
       });
     } catch (_) {
       // 계정 정보를 못 불러와도 "수정"으로 직접 입력할 수 있다.
@@ -175,7 +179,9 @@ class _CheckoutpageState extends State<Checkoutpage> {
       final order = await OrderApi.createOrder(
         ordererName: _ordererName,
         ordererPhone: _ordererPhone,
-        paymentMethod: _paymentMethods[_paymentMethodIndex],
+        paymentMethod: _paymentMethods[
+          _paymentMethodIndex < _paymentMethods.length ? _paymentMethodIndex : 0
+        ],
         couponId: _selectedCoupon?.couponId,
         dealerSeq: cartController.storeSeq.value,
         agreed: _agreed,
