@@ -33,7 +33,7 @@ class PaymentUpdate(BaseModel):
 
 class ProductRef(BaseModel):
     customer_id: str
-    p_code: str = Field(examples=["SAMPLE-NIKE-AF1-07"])
+    p_code: str = Field(examples=["P2001-240"])
 
 
 @router.get("/mypage/summary", summary="마이페이지 요약")

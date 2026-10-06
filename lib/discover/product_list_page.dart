@@ -1,6 +1,14 @@
 import 'package:bootcamp_teamproject_1/discover/discover_api.dart';
 import 'package:bootcamp_teamproject_1/discover/product_detail_page.dart';
+import 'package:bootcamp_teamproject_1/common/fitpick_tab_bar.dart';
+import 'package:bootcamp_teamproject_1/discover/home_page.dart';
+import 'package:bootcamp_teamproject_1/order/cartPage.dart';
+import 'package:bootcamp_teamproject_1/order/orderHistoryPage.dart';
+import 'package:bootcamp_teamproject_1/user/authController.dart';
+import 'package:bootcamp_teamproject_1/user/loginpage.dart';
+import 'package:bootcamp_teamproject_1/user/mypage/my_page.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 
 /// 목업의 상품 찾기 화면. 필터 값과 상품 카드는 API의 MySQL 응답만 표시한다.
 class ProductListPage extends StatefulWidget {
@@ -76,7 +84,28 @@ class _ProductListPageState extends State<ProductListPage> {
         return _body(snap.data!);
       },
     ),
+    bottomNavigationBar: FitpickTabBar(
+      selectedIndex: 1,
+      onSelected: _selectAppTab,
+    ),
   );
+
+  void _selectAppTab(int index) {
+    if (index == 1) return;
+    final authenticated = AuthController.to.isLoggedIn.value;
+    switch (index) {
+      case 0:
+        Get.offAll(() => const HomePage());
+      case 2:
+        Get.offAll(() => authenticated ? const Cartpage() : const LoginPage());
+      case 3:
+        Get.offAll(
+          () => authenticated ? const Orderhistorypage() : const LoginPage(),
+        );
+      case 4:
+        Get.offAll(() => authenticated ? const MyPage() : const LoginPage());
+    }
+  }
 
   Widget _body(_CatalogData data) => ListView(
     padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),

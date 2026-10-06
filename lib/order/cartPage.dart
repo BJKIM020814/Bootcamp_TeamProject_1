@@ -1,9 +1,15 @@
 import 'package:bootcamp_teamproject_1/discover/home_page.dart';
+import 'package:bootcamp_teamproject_1/discover/product_detail_page.dart';
 import 'package:bootcamp_teamproject_1/common/fitpick_snackbar.dart';
+import 'package:bootcamp_teamproject_1/common/fitpick_tab_bar.dart';
 import 'package:bootcamp_teamproject_1/order/cartController.dart';
 import 'package:bootcamp_teamproject_1/order/checkoutPage.dart';
 import 'package:bootcamp_teamproject_1/order/orderApi.dart';
-import 'package:bootcamp_teamproject_1/order/storePickerStub.dart';
+import 'package:bootcamp_teamproject_1/order/orderHistoryPage.dart';
+import 'package:bootcamp_teamproject_1/discover/product_list_page.dart';
+import 'package:bootcamp_teamproject_1/user/authController.dart';
+import 'package:bootcamp_teamproject_1/user/loginpage.dart';
+import 'package:bootcamp_teamproject_1/user/mypage/my_page.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -20,7 +26,10 @@ class _CartpageState extends State<Cartpage> {
   @override
   void initState() {
     super.initState();
-    cartController.load();
+    // 다른 화면에서 라우트가 교체/추가되는 빌드 도중 Rx 값을 바꾸지 않는다.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) cartController.load();
+    });
   }
 
   String _formatWon(int value) => formatWon(value);
@@ -61,7 +70,28 @@ class _CartpageState extends State<Cartpage> {
           return _buildCartList(context);
         }),
       ),
+      bottomNavigationBar: FitpickTabBar(
+        selectedIndex: 2,
+        onSelected: _selectAppTab,
+      ),
     );
+  }
+
+  void _selectAppTab(int index) {
+    if (index == 2) return;
+    final authenticated = AuthController.to.isLoggedIn.value;
+    switch (index) {
+      case 0:
+        Get.offAll(() => const HomePage());
+      case 1:
+        Get.offAll(() => const ProductListPage());
+      case 3:
+        Get.offAll(
+          () => authenticated ? const Orderhistorypage() : const LoginPage(),
+        );
+      case 4:
+        Get.offAll(() => authenticated ? const MyPage() : const LoginPage());
+    }
   }
 
   Widget _buildErrorState(String message) {
@@ -166,10 +196,8 @@ class _CartpageState extends State<Cartpage> {
                 _buildCartItemTile(item),
                 const Divider(height: 24),
               ],
-              _buildStoreCard(),
-              const SizedBox(height: 12),
               Text(
-                '상품은 본사에서 선택한 수령 매장으로 발송됩니다. 결제는 모의 결제로 처리됩니다.',
+                '체크아웃에서 수령 대리점을 선택할 수 있습니다. 주문 완료 후에는 변경할 수 없습니다. 결제는 모의 결제입니다.',
                 style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
               ),
               const SizedBox(height: 16),
@@ -290,6 +318,21 @@ class _CartpageState extends State<Cartpage> {
                     _buildQuantityStepper(item),
                   ],
                 ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: () async {
+                      await Get.to(
+                        () => ProductDetailPage(
+                          productCode: item.productCode,
+                          cartItemId: item.id,
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.tune, size: 16),
+                    label: const Text('색상·사이즈 변경'),
+                  ),
+                ),
               ],
             ),
           ),
@@ -326,73 +369,6 @@ class _CartpageState extends State<Cartpage> {
             iconSize: 16,
             onPressed: () => _act(cartController.updateQuantity(item.id, 1)),
             icon: const Icon(Icons.add),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStoreCard() {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey.shade300),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.location_on_outlined, color: Colors.grey),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Obx(
-                      () => Text(
-                        cartController.storeName.value,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    Obx(
-                      () => Text(
-                        cartController.storeAddress.value,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton(
-              onPressed: () => pickAndApplyStore(cartController),
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                side: BorderSide(color: Colors.grey.shade300),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              child: const Text(
-                '수령 매장 변경',
-                style: TextStyle(
-                  color: Colors.black,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
           ),
         ],
       ),

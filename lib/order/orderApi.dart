@@ -24,9 +24,9 @@ class OrderApi {
   static String? absoluteUrl(String? path) =>
       path == null ? null : ApiClient.absoluteUrl(path);
 
-  static Uri _uri(String path, [Map<String, String>? query]) =>
-      Uri.parse('${ApiClient.baseUrl}$_prefix$path')
-          .replace(queryParameters: query);
+  static Uri _uri(String path, [Map<String, String>? query]) => Uri.parse(
+    '${ApiClient.baseUrl}$_prefix$path',
+  ).replace(queryParameters: query);
 
   static Map<String, String> get _q => {'customer_id': _customerId};
 
@@ -48,11 +48,23 @@ class OrderApi {
     if (response.statusCode >= 400) {
       // 주문 API 오류: {"detail": {"code", "message"}} / 검증 오류: {"detail": [...]}
       final detail = data is Map ? data['detail'] : null;
+      final validationMessage = detail is List
+          ? detail
+                .whereType<Map>()
+                .map((error) {
+                  final location = error['loc'] is List
+                      ? (error['loc'] as List).skip(1).join('.')
+                      : '';
+                  final reason = error['msg']?.toString() ?? '값을 확인해 주세요.';
+                  return location.isEmpty ? reason : '$location: $reason';
+                })
+                .join('\n')
+          : null;
       final message = detail is Map
           ? detail['message'] as String?
           : detail is String
           ? detail
-          : null;
+          : validationMessage;
       throw ApiException(
         message ?? '요청을 처리하지 못했습니다. (${response.statusCode})',
         response.statusCode,
@@ -64,10 +76,9 @@ class OrderApi {
   static Future<Map<String, dynamic>> _get(
     String path, [
     Map<String, String>? query,
-  ]) async =>
-      Map<String, dynamic>.from(
-        await _send(() => http.get(_uri(path, {..._q, ...?query}))) as Map,
-      );
+  ]) async => Map<String, dynamic>.from(
+    await _send(() => http.get(_uri(path, {..._q, ...?query}))) as Map,
+  );
 
   static Future<Map<String, dynamic>> _write(
     String method,
@@ -103,24 +114,29 @@ class OrderApi {
   }
 
   // ---------- 장바구니 ----------
-  static Future<CartData> cart() async => CartData.fromJson(await _get('/cart'));
+  static Future<CartData> cart() async =>
+      CartData.fromJson(await _get('/cart'));
 
-  static Future<CartData> addToCart(String productCode, {int quantity = 1}) async =>
-      CartData.fromJson(
-        await _write('POST', '/cart/items', {
-          'product_code': productCode,
-          'quantity': quantity,
-        }),
-      );
+  static Future<CartData> addToCart(
+    String productCode, {
+    int quantity = 1,
+  }) async => CartData.fromJson(
+    await _write('POST', '/cart/items', {
+      'product_code': productCode,
+      'quantity': quantity,
+    }),
+  );
 
   static Future<CartData> updateCartItem(
     int cartItemId, {
     int? quantity,
     bool? selected,
+    String? productCode,
   }) async => CartData.fromJson(
     await _write('PATCH', '/cart/items/$cartItemId', {
       if (quantity != null) 'quantity': quantity,
       if (selected != null) 'selected': selected,
+      if (productCode != null) 'product_code': productCode,
     }),
   );
 
@@ -134,11 +150,6 @@ class OrderApi {
   static Future<CartData> removeSelected() async =>
       CartData.fromJson(await _delete('/cart/items'));
 
-  static Future<CartData> setPickupStore(int dealerSeq) async =>
-      CartData.fromJson(
-        await _write('PUT', '/cart/pickup-store', {'dealer_seq': dealerSeq}),
-      );
-
   // ---------- 주문/결제 ----------
   static Future<CheckoutData> checkout() async =>
       CheckoutData.fromJson(await _get('/checkout'));
@@ -147,16 +158,16 @@ class OrderApi {
     required String ordererName,
     required String ordererPhone,
     required String paymentMethod,
+    required int dealerSeq,
     int? couponId,
-    int? dealerSeq,
     required bool agreed,
   }) async => OrderDetail.fromJson(
     await _write('POST', '/orders', {
       'orderer_name': ordererName,
       'orderer_phone': ordererPhone,
       'payment_method': paymentMethod,
-      'coupon_id': couponId,
       'dealer_seq': dealerSeq,
+      'coupon_id': couponId,
       'agreed': agreed,
     }),
   );
@@ -170,11 +181,16 @@ class OrderApi {
   }
 
   static Future<OrderDetail> order(String orderNumber) async =>
-      OrderDetail.fromJson(await _get('/orders/${Uri.encodeComponent(orderNumber)}'));
+      OrderDetail.fromJson(
+        await _get('/orders/${Uri.encodeComponent(orderNumber)}'),
+      );
 
   static Future<OrderDetail> cancelOrder(String orderNumber) async =>
       OrderDetail.fromJson(
-        await _write('POST', '/orders/${Uri.encodeComponent(orderNumber)}/cancel'),
+        await _write(
+          'POST',
+          '/orders/${Uri.encodeComponent(orderNumber)}/cancel',
+        ),
       );
 
   // ---------- 매장 수령 ----------
@@ -186,12 +202,14 @@ class OrderApi {
         ),
       );
 
-  static Future<OrderDetail> confirmPickup(String orderNumber, String code) async =>
-      OrderDetail.fromJson(
-        await _write('POST', '/orders/${Uri.encodeComponent(orderNumber)}/pickup', {
-          'code': code,
-        }),
-      );
+  static Future<OrderDetail> confirmPickup(
+    String orderNumber,
+    String code,
+  ) async => OrderDetail.fromJson(
+    await _write('POST', '/orders/${Uri.encodeComponent(orderNumber)}/pickup', {
+      'code': code,
+    }),
+  );
 
   // ---------- 교환/반품 ----------
   static Future<ClaimOptions> claimOptions(

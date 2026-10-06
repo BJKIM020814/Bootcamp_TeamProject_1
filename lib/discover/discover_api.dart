@@ -131,6 +131,13 @@ class PickupStore {
   );
 }
 
+class DiscoverReviewList {
+  const DiscoverReviewList({required this.items, required this.total});
+
+  final List<Map<String, dynamic>> items;
+  final int total;
+}
+
 class DiscoverApi {
   DiscoverApi({http.Client? client}) : _client = client ?? http.Client();
 
@@ -141,13 +148,16 @@ class DiscoverApi {
   final http.Client _client;
   void dispose() => _client.close();
 
-  Future<List<Map<String, dynamic>>> reviews(String code) async {
+  Future<DiscoverReviewList> reviews(String code) async {
     final data = await _getObject(
       '/api/v1/discover/products/${Uri.encodeComponent(code)}/reviews',
     );
-    return (data['items'] as List)
-        .map((item) => Map<String, dynamic>.from(item as Map))
-        .toList();
+    return DiscoverReviewList(
+      items: (data['items'] as List)
+          .map((item) => Map<String, dynamic>.from(item as Map))
+          .toList(),
+      total: data['total'] as int,
+    );
   }
 
   Uri _uri(String path, [Map<String, String>? query]) =>
@@ -257,6 +267,10 @@ class DiscoverApi {
 
   String? imageUrl(DiscoverProduct product) =>
       product.imagePath == null ? null : _uri(product.imagePath!).toString();
+
+  /// API가 반환한 리뷰 이미지 경로를 Discover 서버 주소로 변환합니다.
+  String? imageUrlFromPath(String? path) =>
+      path == null || path.isEmpty ? null : _uri(path).toString();
 
   String bannerUrl(DiscoverBanner banner) => _uri(banner.imagePath).toString();
 }

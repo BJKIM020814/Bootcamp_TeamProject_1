@@ -18,7 +18,7 @@ class CartItem(BaseModel):
     """cartController.CartItem 과 같은 항목. 가격·옵션은 product 테이블의 현재 값이다."""
 
     cart_item_id: int
-    product_code: str = Field(examples=["SAMPLE-NIKE-AF1-07"])
+    product_code: str = Field(examples=["P2001-240"])
     brand: str = Field(examples=["나이키"])
     name: str = Field(examples=["에어 포스 1 '07"])
     color: Optional[str] = Field(default=None, examples=["화이트 / 화이트"])
@@ -28,7 +28,7 @@ class CartItem(BaseModel):
     quantity: int = Field(ge=1, examples=[1])
     selected: bool
     line_total: int
-    image_url: Optional[str] = Field(default=None, examples=["/api/v1/discover/products/SAMPLE-NIKE-AF1-07/image"])
+    image_url: Optional[str] = Field(default=None, examples=["/api/v1/discover/products/P2001-240/image"])
 
 
 class CartResponse(BaseModel):
@@ -36,12 +36,12 @@ class CartResponse(BaseModel):
     total_count: int = Field(ge=0)
     selected_count: int = Field(ge=0)
     selected_total: int = Field(ge=0)
-    pickup_store: Optional[PickupStore] = Field(default=None, description="선택한 수령 매장. 없으면 단골 매장, 그것도 없으면 null")
+    pickup_store: Optional[PickupStore] = Field(default=None, description="고객 장바구니에서는 지점을 선택하지 않습니다.")
 
 
 class CartItemAdd(BaseModel):
     customer_id: CustomerId
-    product_code: str = Field(min_length=1, max_length=45, examples=["SAMPLE-NIKE-AF1-07"])
+    product_code: str = Field(min_length=1, max_length=45, examples=["P2001-240"])
     quantity: int = Field(default=1, ge=1, le=10)
 
 
@@ -49,16 +49,13 @@ class CartItemUpdate(BaseModel):
     customer_id: CustomerId
     quantity: Optional[int] = Field(default=None, ge=1, le=10)
     selected: Optional[bool] = None
+    product_code: Optional[str] = Field(default=None, min_length=1, max_length=45,
+                                        description="주문 전 색상·사이즈 옵션 변경 시 실제 product.p_code")
 
 
 class CartSelectAll(BaseModel):
     customer_id: CustomerId
     selected: bool
-
-
-class CartPickupUpdate(BaseModel):
-    customer_id: CustomerId
-    dealer_seq: int = Field(ge=1, examples=[1])
 
 
 # ---------- 주문/결제 ----------
@@ -85,15 +82,15 @@ class CheckoutResponse(BaseModel):
 
 
 class OrderCreate(BaseModel):
-    """장바구니에서 선택된(selected) 상품으로 주문한다. 가격은 서버가 다시 계산한다."""
+    """주문 전 사용자가 선택한 픽업 지점과 함께 장바구니 선택 상품을 주문한다."""
 
     customer_id: CustomerId
     orderer_name: str = Field(min_length=1, max_length=45, examples=["홍길동"])
     orderer_phone: str = Field(pattern=r"^[0-9\-]{9,20}$", examples=["010-1234-5678"])
     payment_method: str = Field(examples=["신용 / 체크카드"])
     coupon_id: Optional[int] = Field(default=None, examples=[1])
-    dealer_seq: Optional[int] = Field(default=None, ge=1, description="생략하면 장바구니에서 선택한 수령 매장")
-    agreed: bool = Field(description="'상품·수령 매장과 주문 내용을 확인했습니다.' 동의 여부")
+    dealer_seq: int = Field(ge=1, description="주문 시 확정되는 픽업 대리점 ID", examples=[2])
+    agreed: bool = Field(description="'상품 및 주문 내용을 확인했습니다.' 동의 여부")
 
 
 class OrderItem(BaseModel):

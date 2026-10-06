@@ -20,7 +20,7 @@ def list_members(keyword: str | None = Query(None, max_length=100),
     total = db.query_one('SELECT COUNT(*) AS total FROM customer c' + where, params)['total']
     rows = db.query(
         'SELECT c.customer_id,c.name,c.phone,c.gender,c.age,c.totalprice,'
-        'COUNT(pu.p_code) AS purchase_count FROM customer c '
+        'COUNT(DISTINCT pu.order_code) AS purchase_count FROM customer c '
         'LEFT JOIN purchase pu ON pu.customer_customer_id=c.customer_id' + where +
         ' GROUP BY c.customer_id,c.name,c.phone,c.gender,c.age,c.totalprice '
         'ORDER BY c.customer_id LIMIT %s OFFSET %s', [*params, limit, offset])

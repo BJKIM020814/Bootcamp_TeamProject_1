@@ -15,15 +15,15 @@ class ApiError(BaseModel):
 class ProductSummary(BaseModel):
     """List/card data. Product code identifies the registered color/size option."""
 
-    product_code: str = Field(examples=["SAMPLE-NIKE-AF1-07"])
+    product_code: str = Field(examples=["P2001-240"])
     name: str = Field(examples=["에어 포스 1 '07"])
     brand: str = Field(examples=["나이키"])
     price: int = Field(examples=[119000])
-    sku: str = Field(examples=["SAMPLE-NIKE-AF1-07"])
+    sku: str = Field(examples=["SKU-AF1-WH-240"])
     gender: str = Field(examples=["공용"])
     size: Optional[int] = Field(default=None, examples=[270])
     color: Optional[str] = Field(default=None, examples=["화이트 / 화이트"])
-    image_url: Optional[str] = Field(default=None, examples=["/api/v1/discover/products/SAMPLE-NIKE-AF1-07/image"])
+    image_url: Optional[str] = Field(default=None, examples=["/api/v1/discover/products/P2001-240/image"])
 
 
 class ProductListResponse(BaseModel):
@@ -51,6 +51,7 @@ class ReviewItem(BaseModel):
     fit: str
     rating: float
     like_count: int
+    image_url: Optional[str] = None
 
 
 class ReviewListResponse(BaseModel):
@@ -65,7 +66,7 @@ class DiscoverFilters(BaseModel):
     genders: list[str]
     purposes: list[str] = Field(
         default_factory=list,
-        description="product 테이블에 용도 컬럼이 없어 현재 제공하지 않습니다.",
+        description="유효한 상품 이미지가 있는 product 행의 p_usage 값입니다.",
     )
 
 

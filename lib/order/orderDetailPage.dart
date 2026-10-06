@@ -552,28 +552,30 @@ class _OrderdetailpageState extends State<Orderdetailpage> {
             ),
           ],
           const SizedBox(height: 8),
-          GestureDetector(
-            onTap: () => _openMapView(order),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  '지도에서 위치 보기',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    decoration: TextDecoration.underline,
+          if (order.pickupStore != null)
+            GestureDetector(
+              onTap: () => _openMapView(order),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    '지도에서 위치 보기',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      decoration: TextDecoration.underline,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 2),
-                Icon(
-                  Icons.chevron_right,
-                  size: 16,
-                  color: Colors.grey.shade700,
-                ),
-              ],
+                  const SizedBox(width: 2),
+                  Icon(Icons.chevron_right, size: 16, color: Colors.grey.shade700),
+                ],
+              ),
+            )
+          else
+            Text(
+              '수령 대리점은 주문 후 관리자가 배정합니다.',
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
             ),
-          ),
         ],
       ),
     );

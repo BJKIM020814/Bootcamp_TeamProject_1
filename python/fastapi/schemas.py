@@ -154,6 +154,7 @@ class ReviewOut(BaseModel):
     fit: str
     createdAt: datetime
     likeCount: int
+    imageUrl: Optional[str] = None
 
 
 class ReviewableOut(BaseModel):

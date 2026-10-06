@@ -1,6 +1,5 @@
 import 'package:bootcamp_teamproject_1/discover/discover_api.dart';
 import 'package:bootcamp_teamproject_1/common/fitpick_snackbar.dart';
-import 'package:bootcamp_teamproject_1/discover/store_selection_page.dart';
 import 'package:bootcamp_teamproject_1/order/cartController.dart';
 import 'package:bootcamp_teamproject_1/order/cartPage.dart';
 import 'package:bootcamp_teamproject_1/user/authController.dart';
@@ -8,7 +7,7 @@ import 'package:bootcamp_teamproject_1/user/loginpage.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-/// 상세에서 선택한 상품 코드·색상·사이즈를 수령 매장 화면까지 유지합니다.
+/// 상세에서 선택한 실제 상품 코드·색상·사이즈를 장바구니에 전달합니다.
 class SizeSelectionPage extends StatelessWidget {
   const SizeSelectionPage({
     super.key,
@@ -45,10 +44,10 @@ class SizeSelectionPage extends StatelessWidget {
           ),
           const Spacer(),
           FilledButton(
-            onPressed: () => _selectStoreAndAddToCart(context),
+            onPressed: () => _addToCart(context),
             child: const SizedBox(
               width: double.infinity,
-              child: Center(child: Text('수령 매장 선택')),
+              child: Center(child: Text('장바구니 담기')),
             ),
           ),
         ],
@@ -56,38 +55,18 @@ class SizeSelectionPage extends StatelessWidget {
     ),
   );
 
-  /// 선택한 옵션 코드로 장바구니에 담고, 서버에 수령 매장을 함께 지정한다.
-  Future<void> _selectStoreAndAddToCart(BuildContext context) async {
+  /// 상품을 장바구니에 담는다. 픽업 지점은 주문 후 관리자가 배정한다.
+  Future<void> _addToCart(BuildContext context) async {
     if (!AuthController.to.isLoggedIn.value) {
       await Get.to(() => const LoginPage());
       return;
     }
-    final store = await Navigator.of(context).push<PickupStore>(
-      MaterialPageRoute(
-        builder: (_) => StoreSelectionPage(
-          productCode: product.code,
-          color: selectedColor,
-          size: selectedSize,
-        ),
-      ),
-    );
-    if (store == null || !context.mounted) return;
-
+    if (!context.mounted) return;
     final cart = CartController.to;
     if (!await cart.addProduct(product.code)) {
       if (context.mounted) {
         showFitpickSnackbar(
           cart.errorMessage.value ?? '상품을 장바구니에 담지 못했습니다.',
-          title: '오류',
-        );
-      }
-      return;
-    }
-    if (!await cart.updateStore(store.id)) {
-      if (context.mounted) {
-        showFitpickSnackbar(
-          cart.errorMessage.value ??
-              '상품은 담았지만 수령 매장을 지정하지 못했습니다. 장바구니에서 매장을 다시 선택해 주세요.',
           title: '오류',
         );
       }

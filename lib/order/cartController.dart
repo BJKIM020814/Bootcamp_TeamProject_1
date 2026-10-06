@@ -53,20 +53,14 @@ class CartController extends GetxController {
   final RxList<CartItem> items = <CartItem>[].obs;
   final RxBool isLoading = false.obs;
   final RxnString errorMessage = RxnString();
-
-  final RxnInt storeSeq = RxnInt();
-  final RxString storeName = '수령 매장을 선택해 주세요'.obs;
-  final RxString storeAddress = ''.obs;
+  Future<bool>? _loadInFlight;
 
   bool get isEmpty => items.isEmpty;
-
-  bool get hasStore => storeSeq.value != null;
 
   bool get isAllSelected =>
       items.isNotEmpty && items.every((item) => item.selected.value);
 
-  int get selectedCount =>
-      items.where((item) => item.selected.value).length;
+  int get selectedCount => items.where((item) => item.selected.value).length;
 
   int get selectedTotal => items
       .where((item) => item.selected.value)
@@ -74,10 +68,6 @@ class CartController extends GetxController {
 
   void _apply(CartData data) {
     items.assignAll(data.items.map(CartItem.fromLine));
-    final store = data.pickupStore;
-    storeSeq.value = store?.seq;
-    storeName.value = store?.name ?? '수령 매장을 선택해 주세요';
-    storeAddress.value = store?.address ?? '';
     errorMessage.value = null;
   }
 
@@ -95,7 +85,17 @@ class CartController extends GetxController {
     }
   }
 
-  Future<bool> load() => _run(OrderApi.cart);
+  /// 같은 화면 전환 중 중복 호출되더라도 서버 조회 하나만 공유한다.
+  Future<bool> load() {
+    final active = _loadInFlight;
+    if (active != null) return active;
+    late final Future<bool> request;
+    request = _run(OrderApi.cart).whenComplete(() {
+      if (identical(_loadInFlight, request)) _loadInFlight = null;
+    });
+    _loadInFlight = request;
+    return request;
+  }
 
   Future<bool> addProduct(String productCode, {int quantity = 1}) =>
       _run(() => OrderApi.addToCart(productCode, quantity: quantity));
@@ -123,12 +123,12 @@ class CartController extends GetxController {
     return _run(() => OrderApi.updateCartItem(id, quantity: next));
   }
 
-  Future<bool> updateStore(int dealerSeq) =>
-      _run(() => OrderApi.setPickupStore(dealerSeq));
+  /// 장바구니에 있는 동안에만 실제 DB 옵션 행(색상·사이즈)을 바꾼다.
+  Future<bool> updateProduct(int id, String productCode) =>
+      _run(() => OrderApi.updateCartItem(id, productCode: productCode));
 
   /// 로그아웃 등으로 화면 상태만 비울 때 사용한다. (서버 장바구니는 유지)
   void clearLocal() {
     items.clear();
-    storeSeq.value = null;
   }
 }

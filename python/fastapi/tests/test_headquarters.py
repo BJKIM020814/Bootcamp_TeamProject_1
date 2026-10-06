@@ -75,13 +75,13 @@ def test_orders_empty_result_uses_canonical_order_tables(client, monkeypatch):
     assert response.status_code == 200
     assert response.json()['items'] == []
     assert 'quantity' not in response.json()['unavailable_fields']
-    assert all('purchase_order_item' in sql for sql, _ in calls)
-    assert all('JOIN purchase_order_detail' in sql for sql, _ in calls)
+    assert all('purchase' in sql for sql, _ in calls)
+    assert all('purchase_order_item' not in sql for sql, _ in calls)
 
 
 def test_orders_return_checkout_row_and_order_identifier(client, monkeypatch):
     def query(sql, params=None):
-        assert 'purchase_order_item' in sql
+        assert 'FROM purchase pu JOIN product' in sql
         return [{
             'customer_id': 'member@example.com', 'head_office_id': 'HQ004',
             'product_code': 'P1002', 'product_name': '러닝화', 'brand': 'FITPICK',

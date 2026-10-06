@@ -11,6 +11,11 @@ from .schemas import (
 )
 
 router = APIRouter(prefix="/api/v1/discover", tags=["Discover"])
+_IMAGE_SIGNATURES = (
+    (b"\xff\xd8\xff", "image/jpeg"),
+    (b"\x89PNG\r\n\x1a\n", "image/png"),
+    (b"RIFF", "image/webp"),
+)
 
 
 # 상품 행을 화면 응답으로 바꾸며 저장된 문자열 가격의 쉼표를 정수화한다.
@@ -64,7 +69,10 @@ def banner_image(banner_seq: int):
     image = repository.get_banner_image(banner_seq)
     if not image:
         raise HTTPException(status_code=404, detail={"code": "BANNER_IMAGE_NOT_FOUND", "message": "등록된 배너 이미지가 없습니다."})
-    return Response(content=image, media_type="image/jpeg")
+    media_type = next((kind for signature, kind in _IMAGE_SIGNATURES if image.startswith(signature)), None)
+    if media_type is None:
+        raise HTTPException(status_code=422, detail={"code": "INVALID_BANNER_IMAGE", "message": "배너 이미지 형식을 확인해 주세요."})
+    return Response(content=image, media_type=media_type)
 
 
 @router.get("/products/{product_code}", response_model=ProductDetail, summary="상품 코드별 상세와 등록 옵션")
@@ -86,7 +94,10 @@ def product_image(product_code: str):
     image = repository.get_image(product_code)
     if not image:
         raise HTTPException(status_code=404, detail={"code": "PRODUCT_IMAGE_NOT_FOUND", "message": "등록된 상품 이미지가 없습니다."})
-    return Response(content=image, media_type="image/*")
+    media_type = next((kind for signature, kind in _IMAGE_SIGNATURES if image.startswith(signature)), None)
+    if media_type is None:
+        raise HTTPException(status_code=422, detail={"code": "INVALID_PRODUCT_IMAGE", "message": "상품 이미지 파일 형식을 확인해 주세요."})
+    return Response(content=image, media_type=media_type)
 
 
 @router.get("/products/{product_code}/reviews", response_model=ReviewListResponse, summary="상품 구매 리뷰")
@@ -94,7 +105,18 @@ def product_reviews(product_code: str, limit: int = Query(default=20, ge=1, le=1
     if repository.get_product(product_code) is None:
         raise HTTPException(status_code=404, detail={"code": "PRODUCT_NOT_FOUND", "message": "상품을 찾을 수 없습니다."})
     rows, total = repository.list_reviews(product_code, limit, offset)
-    return ReviewListResponse(items=[ReviewItem(customer_id=row["customer_customer_id"], created_at=row["r_date"], content=row["context"], fit=row["r_fit"], rating=row["rating"], like_count=row["likecount"]) for row in rows], total=total)
+    return ReviewListResponse(items=[ReviewItem(customer_id=row["customer_customer_id"], created_at=row["r_date"], content=row["context"], fit=row["r_fit"], rating=row["rating"], like_count=row["likecount"], image_url=f"/api/v1/discover/reviews/{row['review_seq']}/image" if (row["image_bytes"] or 0) >= 16 else None) for row in rows], total=total)
+
+
+@router.get("/reviews/{review_id}/image", summary="리뷰 이미지 바이너리")
+def review_image(review_id: int):
+    image = repository.get_review_image(review_id)
+    if not image:
+        raise HTTPException(status_code=404, detail={"code": "REVIEW_IMAGE_NOT_FOUND", "message": "등록된 리뷰 이미지가 없습니다."})
+    media_type = next((kind for signature, kind in _IMAGE_SIGNATURES if image.startswith(signature)), None)
+    if media_type is None:
+        raise HTTPException(status_code=422, detail={"code": "INVALID_REVIEW_IMAGE", "message": "리뷰 이미지 파일 형식을 확인해 주세요."})
+    return Response(content=image, media_type=media_type)
 
 
 @router.get("/pickup-stores", response_model=PickupStoreListResponse, summary="본사 발송 상품 수령 대리점 조회")
