@@ -1,106 +1,134 @@
+import 'package:bootcamp_teamproject_1/order/orderApi.dart';
 import 'package:get/get.dart';
 
-/// 장바구니에 담긴 상품 한 줄을 표현한다.
+/// 장바구니에 담긴 상품 한 줄을 표현한다. 값은 서버(/api/v1/order/cart) 응답이다.
 class CartItem {
   CartItem({
     required this.id,
+    required this.productCode,
     required this.brand,
     required this.name,
     required this.colorLabel,
     required this.size,
     required this.price,
-    this.imagePath,
+    this.imageUrl,
     int quantity = 1,
     bool selected = true,
   }) : quantity = quantity.obs,
        selected = selected.obs;
 
-  final String id;
+  factory CartItem.fromLine(CartLine line) => CartItem(
+    id: line.cartItemId,
+    productCode: line.productCode,
+    brand: line.brand,
+    name: line.name,
+    colorLabel: line.optionLabel,
+    size: line.size == null ? '-' : '${line.size}mm',
+    price: line.price,
+    imageUrl: line.imageUrl,
+    quantity: line.quantity,
+    selected: line.selected,
+  );
+
+  final int id;
+  final String productCode;
   final String brand;
   final String name;
   final String colorLabel;
   final String size;
   final int price;
-  final String? imagePath;
+  final String? imageUrl;
   final RxInt quantity;
   final RxBool selected;
 }
 
-/// 앱 화면 사이에서 공유하는 장바구니 데모 상태.
-/// 현재 서버 장바구니 테이블/API가 연결되기 전까지 변경 내용은 메모리에만 있다.
+/// 장바구니 전역 상태. 다른 화면(상품 상세 등)에서도
+/// `CartController.to.addProduct(productCode)`로 담기 기능을 연결할 수 있다.
+/// 모든 변경은 서버에 먼저 반영하고, 서버가 돌려준 장바구니로 화면을 갱신한다.
 class CartController extends GetxController {
   static CartController get to => Get.isRegistered<CartController>()
       ? Get.find<CartController>()
       : Get.put(CartController(), permanent: true);
 
   final RxList<CartItem> items = <CartItem>[].obs;
+  final RxBool isLoading = false.obs;
+  final RxnString errorMessage = RxnString();
 
-  final RxString storeName = '강남 스토어'.obs;
-  final RxString storeAddress = '서울 강남구 강남역 인근 · 예시 위치'.obs;
+  final RxnInt storeSeq = RxnInt();
+  final RxString storeName = '수령 매장을 선택해 주세요'.obs;
+  final RxString storeAddress = ''.obs;
 
   bool get isEmpty => items.isEmpty;
+
+  bool get hasStore => storeSeq.value != null;
 
   bool get isAllSelected =>
       items.isNotEmpty && items.every((item) => item.selected.value);
 
-  int get selectedCount => items.where((item) => item.selected.value).length;
+  int get selectedCount =>
+      items.where((item) => item.selected.value).length;
 
   int get selectedTotal => items
       .where((item) => item.selected.value)
       .fold(0, (sum, item) => sum + item.price * item.quantity.value);
 
-  void addItem(CartItem item) => items.add(item);
-
-  void removeItem(String id) => items.removeWhere((item) => item.id == id);
-
-  void removeSelected() => items.removeWhere((item) => item.selected.value);
-
-  void toggleItem(String id) {
-    final item = items.firstWhereOrNull((item) => item.id == id);
-    if (item != null) item.selected.value = !item.selected.value;
+  void _apply(CartData data) {
+    items.assignAll(data.items.map(CartItem.fromLine));
+    final store = data.pickupStore;
+    storeSeq.value = store?.seq;
+    storeName.value = store?.name ?? '수령 매장을 선택해 주세요';
+    storeAddress.value = store?.address ?? '';
+    errorMessage.value = null;
   }
 
-  void toggleSelectAll(bool value) {
-    for (final item in items) {
-      item.selected.value = value;
+  /// 서버 요청을 실행하고 실패하면 errorMessage 에 남긴다. 성공 여부를 돌려준다.
+  Future<bool> _run(Future<CartData> Function() request) async {
+    isLoading.value = true;
+    try {
+      _apply(await request());
+      return true;
+    } catch (error) {
+      errorMessage.value = error.toString();
+      return false;
+    } finally {
+      isLoading.value = false;
     }
-    items.refresh();
   }
 
-  void updateQuantity(String id, int delta) {
+  Future<bool> load() => _run(OrderApi.cart);
+
+  Future<bool> addProduct(String productCode, {int quantity = 1}) =>
+      _run(() => OrderApi.addToCart(productCode, quantity: quantity));
+
+  Future<bool> removeItem(int id) => _run(() => OrderApi.removeCartItem(id));
+
+  Future<bool> removeSelected() => _run(OrderApi.removeSelected);
+
+  Future<bool> toggleItem(int id) {
     final item = items.firstWhereOrNull((item) => item.id == id);
-    if (item == null) return;
+    if (item == null) return Future.value(false);
+    return _run(
+      () => OrderApi.updateCartItem(id, selected: !item.selected.value),
+    );
+  }
+
+  Future<bool> toggleSelectAll(bool value) =>
+      _run(() => OrderApi.selectAll(value));
+
+  Future<bool> updateQuantity(int id, int delta) {
+    final item = items.firstWhereOrNull((item) => item.id == id);
+    if (item == null) return Future.value(false);
     final next = item.quantity.value + delta;
-    if (next < 1) return;
-    item.quantity.value = next;
+    if (next < 1 || next > 10) return Future.value(false);
+    return _run(() => OrderApi.updateCartItem(id, quantity: next));
   }
 
-  void updateStore(String name, String address) {
-    storeName.value = name;
-    storeAddress.value = address;
-  }
+  Future<bool> updateStore(int dealerSeq) =>
+      _run(() => OrderApi.setPickupStore(dealerSeq));
 
-  /// 비어 있는 장바구니 화면의 UI 확인을 위한 목업 데이터를 한 번 추가한다.
-  void seedSampleData() {
-    if (items.isNotEmpty) return;
-    items.addAll([
-      CartItem(
-        id: 'sample-1',
-        brand: 'NEW BALANCE',
-        name: '530',
-        colorLabel: '화이트 / 네추럴 인디고 · 270mm',
-        size: '270mm',
-        price: 129000,
-      ),
-      CartItem(
-        id: 'sample-2',
-        brand: 'NIKE',
-        name: "에어 포스 1 '07",
-        colorLabel: '화이트 / 화이트 · 270mm',
-        size: '270mm',
-        price: 119000,
-        selected: false,
-      ),
-    ]);
+  /// 로그아웃 등으로 화면 상태만 비울 때 사용한다. (서버 장바구니는 유지)
+  void clearLocal() {
+    items.clear();
+    storeSeq.value = null;
   }
 }

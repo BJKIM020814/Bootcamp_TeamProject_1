@@ -15,7 +15,6 @@ def inventory(_employee=Depends(current_headquarters_employee), accounts=Depends
     client = accounts.client
     docs = list(client.collection('office_inventory').stream())
     items = []
-    unresolved = []
     for doc in docs:
         data = doc.to_dict() or {}
         code = data.get('productId')
@@ -23,7 +22,6 @@ def inventory(_employee=Depends(current_headquarters_employee), accounts=Depends
             continue
         product = db.query_one('SELECT p_code,p_name,b_name FROM product WHERE p_code=%s', (code,))
         if product is None:
-            unresolved.append(code)
             continue
         minimum = data.get('minimumQuantity')
         current = data.get('currentQuantity')
@@ -35,7 +33,7 @@ def inventory(_employee=Depends(current_headquarters_employee), accounts=Depends
                                minimum_quantity=minimum, current_quantity=current,
                                reorder_required=(current < minimum) if current is not None and minimum is not None else None,
                                quantity_source='office_inventory.currentQuantity' if current is not None else '미설정'))
-    return StockPage(items=items, total=len(items), unresolved_product_codes=unresolved)
+    return StockPage(items=items, total=len(items))
 
 
 @router.post('/{product_code}/adjustments', status_code=501, summary='재고 수량 조정', description='현재 Firebase에는 검증된 현재고·입출고 원장과 상품별 발송 연결키가 없어 원자적 재고 조정을 안전하게 저장할 수 없습니다.')

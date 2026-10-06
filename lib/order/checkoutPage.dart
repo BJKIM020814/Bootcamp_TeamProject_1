@@ -1,18 +1,13 @@
 import 'package:bootcamp_teamproject_1/order/cartController.dart';
 import 'package:bootcamp_teamproject_1/order/cartPage.dart';
+import 'package:bootcamp_teamproject_1/order/orderApi.dart';
 import 'package:bootcamp_teamproject_1/order/orderCompletePage.dart';
 import 'package:bootcamp_teamproject_1/order/storePickerStub.dart';
+import 'package:bootcamp_teamproject_1/services/account_service.dart';
+import 'package:bootcamp_teamproject_1/user/authController.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-class _Coupon {
-  const _Coupon(this.label, this.discount);
-  final String label;
-  final int Function(int subtotal) discount;
-}
-
-/// 장바구니 목업의 금액/매장/결제수단을 확인하는 데모 주문 화면.
-/// 현재 결제수단 선택과 주문 완료는 PG 승인 또는 MySQL 주문 API를 호출하지 않는다.
 class Checkoutpage extends StatefulWidget {
   const Checkoutpage({super.key});
 
@@ -23,37 +18,75 @@ class Checkoutpage extends StatefulWidget {
 class _CheckoutpageState extends State<Checkoutpage> {
   final CartController cartController = CartController.to;
 
-  // 주문자 정보 (데모용 기본값, "수정"으로 변경 가능)
-  String _ordererName = '홍길동';
-  String _ordererPhone = '010-1234-5678';
+  // 주문자 정보: Firebase account(이름/전화번호)에서 불러오고, "수정"으로 이번 주문에만 바꿀 수 있다.
+  String _ordererName = '';
+  String _ordererPhone = '';
+
+  /// 서버(/api/v1/order/checkout)가 내려준 결제수단·쿠폰. null 이면 불러오는 중.
+  CheckoutData? _checkout;
+  String? _loadError;
+  bool _paying = false;
 
   int _paymentMethodIndex = 0;
-  static const _paymentMethods = ['신용 / 체크카드', '카카오페이', '네이버페이'];
+  List<String> get _paymentMethods =>
+      _checkout?.paymentMethods ?? const ['신용 / 체크카드'];
 
-  static final _coupons = <_Coupon>[
-    const _Coupon('쿠폰 사용 안 함', _noDiscount),
-    _Coupon('5,000원 할인 쿠폰', (subtotal) => subtotal > 0 ? 5000 : 0),
-    _Coupon('10% 할인 쿠폰', (subtotal) => (subtotal * 0.1).round()),
-  ];
-  static int _noDiscount(int subtotal) => 0;
-
+  /// 0 = 쿠폰 사용 안 함, 1.. = 서버 쿠폰 목록
   int _selectedCouponIndex = 0;
+  List<CheckoutCoupon> get _coupons => _checkout?.coupons ?? const [];
+  CheckoutCoupon? get _selectedCoupon =>
+      _selectedCouponIndex == 0 ? null : _coupons[_selectedCouponIndex - 1];
+
+  /// 서버 쿠폰 할인액은 주문 상품 금액 기준이다. 현재 금액을 넘지 않게만 맞춘다.
+  int _discountOf(int subtotal) {
+    final coupon = _selectedCoupon;
+    if (coupon == null) return 0;
+    return coupon.discountAmount > subtotal ? subtotal : coupon.discountAmount;
+  }
 
   bool _agreed = false;
 
   List<CartItem> get _orderItems =>
       cartController.items.where((item) => item.selected.value).toList();
 
-  String _formatWon(int value) {
-    final sign = value < 0 ? '-' : '';
-    final digits = value.abs().toString();
-    final buffer = StringBuffer();
-    for (var i = 0; i < digits.length; i++) {
-      final remaining = digits.length - i;
-      if (i > 0 && remaining % 3 == 0) buffer.write(',');
-      buffer.write(digits[i]);
+  String _formatWon(int value) => formatWon(value);
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCheckout();
+    _loadOrderer();
+  }
+
+  Future<void> _loadCheckout() async {
+    setState(() => _loadError = null);
+    try {
+      final data = await OrderApi.checkout();
+      if (!mounted) return;
+      setState(() {
+        _checkout = data;
+        final index = data.paymentMethods.indexOf(data.defaultPayment);
+        _paymentMethodIndex = index < 0 ? 0 : index;
+        _selectedCouponIndex = 0;
+      });
+    } catch (error) {
+      if (mounted) setState(() => _loadError = error.toString());
     }
-    return '$sign₩$buffer';
+  }
+
+  Future<void> _loadOrderer() async {
+    final email = AuthController.to.customerId.value;
+    if (email == null) return;
+    try {
+      final basic = await AccountService.getBasic(email);
+      if (!mounted) return;
+      setState(() {
+        if (_ordererName.isEmpty) _ordererName = basic.name;
+        if (_ordererPhone.isEmpty) _ordererPhone = basic.phone;
+      });
+    } catch (_) {
+      // 계정 정보를 못 불러와도 "수정"으로 직접 입력할 수 있다.
+    }
   }
 
   int _subtotal(List<CartItem> items) =>
@@ -122,34 +155,45 @@ class _CheckoutpageState extends State<Checkoutpage> {
     });
   }
 
-  String _generateOrderNumber() {
-    final raw = DateTime.now().millisecondsSinceEpoch
-        .toRadixString(16)
-        .toUpperCase();
-    final suffix = raw.length >= 8
-        ? raw.substring(raw.length - 8)
-        : raw.padLeft(8, '0');
-    return 'DEMO-$suffix';
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
-  void _pay(List<CartItem> orderItems) {
-    if (!_agreed || orderItems.isEmpty) return;
-    final subtotal = _subtotal(orderItems);
-    final discount = _coupons[_selectedCouponIndex].discount(subtotal);
-    final orderNumber = _generateOrderNumber();
-    final storeName = cartController.storeName.value;
-    final paymentMethod = _paymentMethods[_paymentMethodIndex];
-
-    cartController.items.removeWhere((item) => item.selected.value);
-
-    Get.off(
-      () => Ordercompletepage(
-        orderNumber: orderNumber,
-        storeName: storeName,
-        paymentMethod: paymentMethod,
-        paidAmount: subtotal - discount,
-      ),
-    );
+  /// 서버에 주문을 만든다. 가격·할인은 서버가 다시 계산하고, 주문된 상품은 장바구니에서 빠진다.
+  Future<void> _pay(List<CartItem> orderItems) async {
+    if (!_agreed || orderItems.isEmpty || _paying) return;
+    if (!cartController.hasStore) {
+      _showMessage('수령 매장을 선택해 주세요.');
+      return;
+    }
+    if (_ordererName.isEmpty || _ordererPhone.isEmpty) {
+      _showMessage('주문자 이름과 연락처를 입력해 주세요.');
+      return;
+    }
+    setState(() => _paying = true);
+    try {
+      final order = await OrderApi.createOrder(
+        ordererName: _ordererName,
+        ordererPhone: _ordererPhone,
+        paymentMethod: _paymentMethods[_paymentMethodIndex],
+        couponId: _selectedCoupon?.couponId,
+        dealerSeq: cartController.storeSeq.value,
+        agreed: _agreed,
+      );
+      await cartController.load();
+      Get.off(
+        () => Ordercompletepage(
+          orderNumber: order.orderNumber,
+          storeName: order.storeName,
+          paymentMethod: order.paymentMethod,
+          paidAmount: order.paidAmount,
+        ),
+      );
+    } catch (error) {
+      if (mounted) _showMessage(error.toString());
+    } finally {
+      if (mounted) setState(() => _paying = false);
+    }
   }
 
   @override
@@ -168,9 +212,32 @@ class _CheckoutpageState extends State<Checkoutpage> {
       body: SafeArea(
         child: Obx(() {
           final orderItems = _orderItems;
+          if (_loadError != null) return _buildErrorState(_loadError!);
+          if (_checkout == null) {
+            return const Center(child: CircularProgressIndicator());
+          }
           if (orderItems.isEmpty) return _buildEmptyState();
           return _buildCheckoutForm(orderItems);
         }),
+      ),
+    );
+  }
+
+  Widget _buildErrorState(String message) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(message, textAlign: TextAlign.center),
+            const SizedBox(height: 12),
+            OutlinedButton(
+              onPressed: _loadCheckout,
+              child: const Text('다시 시도'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -188,7 +255,10 @@ class _CheckoutpageState extends State<Checkoutpage> {
               border: Border.all(color: Colors.grey.shade300),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.shopping_bag_outlined, color: Colors.grey),
+            child: const Icon(
+              Icons.shopping_bag_outlined,
+              color: Colors.grey,
+            ),
           ),
           const SizedBox(height: 20),
           const Text(
@@ -226,7 +296,7 @@ class _CheckoutpageState extends State<Checkoutpage> {
 
   Widget _buildCheckoutForm(List<CartItem> orderItems) {
     final subtotal = _subtotal(orderItems);
-    final discount = _coupons[_selectedCouponIndex].discount(subtotal);
+    final discount = _discountOf(subtotal);
     final total = subtotal - discount;
 
     return Column(
@@ -274,7 +344,7 @@ class _CheckoutpageState extends State<Checkoutpage> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  '시연용 결제입니다. 실제 결제, 재고 차감, 매장 접수는 발생하지 않습니다.',
+                  '모의 결제입니다. 실제 결제는 발생하지 않으며, 주문은 서버에 저장되어 주문내역에서 확인할 수 있습니다.',
                   style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
                 ),
               ),
@@ -360,7 +430,10 @@ class _CheckoutpageState extends State<Checkoutpage> {
                 Obx(
                   () => Text(
                     cartController.storeAddress.value,
-                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                    ),
                   ),
                 ),
               ],
@@ -423,11 +496,19 @@ class _CheckoutpageState extends State<Checkoutpage> {
           Container(
             width: 56,
             height: 56,
+            clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
               color: Colors.grey.shade200,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(Icons.image_outlined, color: Colors.grey),
+            child: item.imageUrl == null
+                ? const Icon(Icons.image_outlined, color: Colors.grey)
+                : Image.network(
+                    item.imageUrl!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) =>
+                        const Icon(Icons.image_outlined, color: Colors.grey),
+                  ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -467,7 +548,10 @@ class _CheckoutpageState extends State<Checkoutpage> {
                   ),
                   child: Text(
                     '본사 발송 준비',
-                    style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.grey.shade700,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -511,11 +595,11 @@ class _CheckoutpageState extends State<Checkoutpage> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
-            _ordererName,
+            _ordererName.isEmpty ? '이름을 입력해 주세요' : _ordererName,
             style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
           ),
           Text(
-            _ordererPhone,
+            _ordererPhone.isEmpty ? '연락처 미입력' : _ordererPhone,
             style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
           ),
         ],
@@ -524,20 +608,19 @@ class _CheckoutpageState extends State<Checkoutpage> {
   }
 
   Widget _buildPaymentMethods() {
-    return RadioGroup<int>(
-      groupValue: _paymentMethodIndex,
-      onChanged: (value) => setState(() => _paymentMethodIndex = value ?? 0),
-      child: Column(
-        children: [
-          for (var i = 0; i < _paymentMethods.length; i++)
-            RadioListTile<int>(
-              contentPadding: EdgeInsets.zero,
-              dense: true,
-              value: i,
-              title: Text(_paymentMethods[i]),
-            ),
-        ],
-      ),
+    return Column(
+      children: [
+        for (var i = 0; i < _paymentMethods.length; i++)
+          RadioListTile<int>(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            value: i,
+            groupValue: _paymentMethodIndex,
+            onChanged: (value) =>
+                setState(() => _paymentMethodIndex = value ?? 0),
+            title: Text(_paymentMethods[i]),
+          ),
+      ],
     );
   }
 
@@ -553,8 +636,19 @@ class _CheckoutpageState extends State<Checkoutpage> {
           value: _selectedCouponIndex,
           isExpanded: true,
           items: [
+            DropdownMenuItem(
+              value: 0,
+              child: Text(
+                _coupons.isEmpty ? '사용 가능한 쿠폰이 없습니다' : '쿠폰 사용 안 함',
+              ),
+            ),
             for (var i = 0; i < _coupons.length; i++)
-              DropdownMenuItem(value: i, child: Text(_coupons[i].label)),
+              DropdownMenuItem(
+                value: i + 1,
+                child: Text(
+                  '${_coupons[i].name} (${_formatWon(-_coupons[i].discountAmount)})',
+                ),
+              ),
           ],
           onChanged: (value) =>
               setState(() => _selectedCouponIndex = value ?? 0),
@@ -591,7 +685,10 @@ class _CheckoutpageState extends State<Checkoutpage> {
             ),
             Text(
               _formatWon(total),
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ],
         ),
@@ -620,7 +717,7 @@ class _CheckoutpageState extends State<Checkoutpage> {
   }
 
   Widget _buildPayBar(List<CartItem> orderItems, int total) {
-    final enabled = _agreed && orderItems.isNotEmpty;
+    final enabled = _agreed && orderItems.isNotEmpty && !_paying;
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       decoration: BoxDecoration(
@@ -641,7 +738,7 @@ class _CheckoutpageState extends State<Checkoutpage> {
             ),
           ),
           child: Text(
-            '${_formatWon(total)} 모의 결제하기',
+            _paying ? '주문 처리 중…' : '${_formatWon(total)} 모의 결제하기',
             style: const TextStyle(fontWeight: FontWeight.bold),
           ),
         ),

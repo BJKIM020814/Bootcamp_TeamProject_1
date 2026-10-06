@@ -1,103 +1,117 @@
 import 'package:bootcamp_teamproject_1/order/cartPage.dart';
+import 'package:bootcamp_teamproject_1/order/orderApi.dart';
 import 'package:bootcamp_teamproject_1/order/orderDetailPage.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-/// 실제 주문 토큰 대신 샘플 주문 정보와 QR/난수 자리표시자를 보여 주는 데모 화면.
+/// 매장 수령증. 서버가 발급한 일회성 인증번호(10분 유효)를 보여주고,
+/// 매장 확인 후 "수령 완료"를 누르면 서버에서 인증번호를 검증해 수령 처리한다.
+/// 수령 처리되면 Navigator.pop(context, true) 로 돌아간다.
 class Pickupqrpage extends StatefulWidget {
-  const Pickupqrpage({
-    super.key,
-    this.orderNumber = 'FP260927-004',
-    this.storeName = '신사 스토어',
-    this.visitWindow = '09.24-09.27 · 운영시간 내 방문 (예시)',
-    this.brand = 'NEW BALANCE',
-    this.productName = '530',
-    this.colorLabel = '화이트 / 네추럴 인디고 · 270mm',
-    this.price = 129000,
-    this.quantity = 1,
-    this.alreadyPickedUp = false,
-  });
+  const Pickupqrpage({super.key, required this.orderNumber});
 
   final String orderNumber;
-  final String storeName;
-  final String visitWindow;
-  final String brand;
-  final String productName;
-  final String colorLabel;
-  final int price;
-  final int quantity;
-  final bool alreadyPickedUp;
 
   @override
   State<Pickupqrpage> createState() => _PickupqrpageState();
 }
 
 class _PickupqrpageState extends State<Pickupqrpage> {
-  late final bool _pickedUp;
+  OrderDetail? _order;
+  PickupCode? _code;
+  String? _error;
+  bool _confirming = false;
 
   @override
   void initState() {
     super.initState();
-    _pickedUp = widget.alreadyPickedUp;
+    _load();
   }
 
-  String _formatWon(int value) {
-    final digits = value.toString();
-    final buffer = StringBuffer();
-    for (var i = 0; i < digits.length; i++) {
-      final remaining = digits.length - i;
-      if (i > 0 && remaining % 3 == 0) buffer.write(',');
-      buffer.write(digits[i]);
+  Future<void> _load() async {
+    setState(() => _error = null);
+    try {
+      final order = await OrderApi.order(widget.orderNumber);
+      final code = order.status == 'READY'
+          ? await OrderApi.issuePickupCode(widget.orderNumber)
+          : null;
+      if (!mounted) return;
+      setState(() {
+        _order = order;
+        _code = code;
+      });
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
     }
-    return '₩$buffer';
   }
 
-  // 시연용 난수. 실제 서비스에서는 서버가 발급한 일회성 인증번호로 교체한다.
-  String get _demoCode {
-    final n = widget.orderNumber.hashCode.abs() % 1000000;
-    final s = n.toString().padLeft(6, '0');
-    return '${s.substring(0, 3)} ${s.substring(3)}';
-  }
+  bool get _expired =>
+      _code != null && DateTime.now().isAfter(_code!.expiresAt);
 
-  void _markPickedUp() {
-    Navigator.of(context).pop(true);
+  Future<void> _markPickedUp() async {
+    final code = _code;
+    if (code == null || _confirming) return;
+    if (_expired) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('인증번호가 만료되어 새로 발급합니다.')),
+      );
+      _load();
+      return;
+    }
+    setState(() => _confirming = true);
+    try {
+      await OrderApi.confirmPickup(widget.orderNumber, code.code);
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.toString())),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _confirming = false);
+    }
   }
 
   void _goOrderDetail() {
-    Get.off(
-      () => Orderdetailpage(
-        orderNumber: widget.orderNumber,
-        brand: widget.brand,
-        productName: widget.productName,
-        colorLabel: widget.colorLabel,
-        price: widget.price,
-        quantity: widget.quantity,
-        storeName: widget.storeName,
-        initialStage: PickupStage.completed,
-      ),
-    );
+    Get.off(() => Orderdetailpage(orderNumber: widget.orderNumber));
   }
 
   @override
   Widget build(BuildContext context) {
+    final order = _order;
     return Scaffold(
       appBar: AppBar(
         title: Text('수령 인증 QR'),
         centerTitle: true,
         actions: [
           IconButton(
-            onPressed: () => Get.to(Cartpage()),
+            onPressed: () => Get.to(() => const Cartpage()),
             icon: Icon(Icons.shopping_bag_outlined),
           ),
         ],
       ),
       body: SafeArea(
-        child: _pickedUp ? _buildAlreadyPickedUpState() : _buildPickupFlow(),
+        child: _error != null
+            ? _buildMessageState('수령증을 불러오지 못했어요', _error!, retry: true)
+            : order == null
+            ? const Center(child: CircularProgressIndicator())
+            : order.pickedUp
+            ? _buildMessageState(
+                '이미 수령한 주문이에요',
+                '수령이 완료된 주문은 주문 상세에서 확인할 수 있습니다.',
+              )
+            : _code == null
+            ? _buildMessageState(
+                '아직 수령할 수 없어요',
+                '현재 상태: ${order.statusLabel}\n모든 상품이 매장에 도착해 수령 준비가 완료되면 수령증이 열립니다.',
+              )
+            : _buildPickupFlow(order, _code!),
       ),
     );
   }
 
-  Widget _buildAlreadyPickedUpState() {
+  Widget _buildMessageState(String title, String message, {bool retry = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
@@ -113,13 +127,13 @@ class _PickupqrpageState extends State<Pickupqrpage> {
             child: const Icon(Icons.shopping_bag_outlined, color: Colors.grey),
           ),
           const SizedBox(height: 20),
-          const Text(
-            '이미 수령한 주문이에요',
-            style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+          Text(
+            title,
+            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
           Text(
-            '모든 상품의 준비가 완료된 주문에서만 수령증을 확인할 수 있습니다.',
+            message,
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
           ),
@@ -128,7 +142,7 @@ class _PickupqrpageState extends State<Pickupqrpage> {
             width: double.infinity,
             height: 50,
             child: ElevatedButton(
-              onPressed: _goOrderDetail,
+              onPressed: retry ? _load : _goOrderDetail,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.black,
                 foregroundColor: Colors.white,
@@ -136,9 +150,9 @@ class _PickupqrpageState extends State<Pickupqrpage> {
                   borderRadius: BorderRadius.circular(10),
                 ),
               ),
-              child: const Text(
-                '주문·준비 상태 확인',
-                style: TextStyle(fontWeight: FontWeight.bold),
+              child: Text(
+                retry ? '다시 시도' : '주문·준비 상태 확인',
+                style: const TextStyle(fontWeight: FontWeight.bold),
               ),
             ),
           ),
@@ -147,7 +161,7 @@ class _PickupqrpageState extends State<Pickupqrpage> {
     );
   }
 
-  Widget _buildPickupFlow() {
+  Widget _buildPickupFlow(OrderDetail order, PickupCode code) {
     return Column(
       children: [
         Expanded(
@@ -180,12 +194,13 @@ class _PickupqrpageState extends State<Pickupqrpage> {
                 ),
               ),
               const SizedBox(height: 20),
-              _buildTicketCard(),
+              _buildTicketCard(order, code),
               const SizedBox(height: 20),
-              _buildProductCard(),
-              const SizedBox(height: 14),
-              _buildMockNotice(),
-              const SizedBox(height: 18),
+              for (final item in order.items) ...[
+                _buildProductCard(item),
+                const SizedBox(height: 10),
+              ],
+              const SizedBox(height: 8),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -220,7 +235,7 @@ class _PickupqrpageState extends State<Pickupqrpage> {
             width: double.infinity,
             height: 50,
             child: ElevatedButton(
-              onPressed: _markPickedUp,
+              onPressed: _confirming ? null : _markPickedUp,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.black,
                 foregroundColor: Colors.white,
@@ -228,9 +243,9 @@ class _PickupqrpageState extends State<Pickupqrpage> {
                   borderRadius: BorderRadius.circular(10),
                 ),
               ),
-              child: const Text(
-                '수령 완료 시연',
-                style: TextStyle(fontWeight: FontWeight.bold),
+              child: Text(
+                _confirming ? '확인 중…' : '수령 완료',
+                style: const TextStyle(fontWeight: FontWeight.bold),
               ),
             ),
           ),
@@ -239,7 +254,17 @@ class _PickupqrpageState extends State<Pickupqrpage> {
     );
   }
 
-  Widget _buildTicketCard() {
+  String _shortDate(DateTime date) =>
+      '${date.month.toString().padLeft(2, '0')}.${date.day.toString().padLeft(2, '0')}';
+
+  Widget _buildTicketCard(OrderDetail order, PickupCode code) {
+    final from = code.visitFrom;
+    final until = code.visitUntil;
+    final visitWindow = from != null && until != null
+        ? '${_shortDate(from)}-${_shortDate(until)} · 운영시간 내 방문'
+        : '운영시간 내 방문';
+    final expiresAt =
+        '${code.expiresAt.hour.toString().padLeft(2, '0')}:${code.expiresAt.minute.toString().padLeft(2, '0')}';
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -254,25 +279,25 @@ class _PickupqrpageState extends State<Pickupqrpage> {
               const Icon(Icons.location_on_outlined, size: 16),
               const SizedBox(width: 4),
               Text(
-                widget.storeName,
+                order.storeName,
                 style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
               ),
             ],
           ),
           const SizedBox(height: 4),
           Text(
-            widget.visitWindow,
+            visitWindow,
             style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
           ),
           const SizedBox(height: 16),
           _buildDashedDivider(),
           const SizedBox(height: 16),
           Text(
-            '수령 인증 QR · DEMO PICKUP PASS',
+            '수령 인증 QR · PICKUP PASS',
             style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
           ),
           const SizedBox(height: 14),
-          // TODO: QR 패키지 연동 전까지는 자리만 확보해 둔 placeholder.
+          // TODO: QR 패키지(qr_flutter 등) 추가 시 code.qrPayload 로 실제 QR 을 그린다.
           Container(
             width: 200,
             height: 200,
@@ -284,9 +309,8 @@ class _PickupqrpageState extends State<Pickupqrpage> {
             child: Icon(Icons.qr_code_2, size: 160, color: Colors.grey.shade800),
           ),
           const SizedBox(height: 16),
-          // TODO: 서버가 발급하는 실제 일회성 인증번호로 교체할 자리.
           Text(
-            _demoCode,
+            code.code,
             style: const TextStyle(
               fontSize: 26,
               fontWeight: FontWeight.bold,
@@ -295,15 +319,16 @@ class _PickupqrpageState extends State<Pickupqrpage> {
           ),
           const SizedBox(height: 4),
           Text(
-            widget.orderNumber,
+            order.orderNumber,
             style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
           ),
           const SizedBox(height: 10),
           Text(
-            '수령 인증 시연용 QR · 실제 매장에서는 사용할 수 없습니다.',
+            '인증번호는 $expiresAt까지 유효합니다.',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
           ),
+          TextButton(onPressed: _load, child: const Text('인증번호 새로 받기')),
         ],
       ),
     );
@@ -323,7 +348,7 @@ class _PickupqrpageState extends State<Pickupqrpage> {
     );
   }
 
-  Widget _buildProductCard() {
+  Widget _buildProductCard(OrderLine item) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -336,11 +361,19 @@ class _PickupqrpageState extends State<Pickupqrpage> {
           Container(
             width: 56,
             height: 56,
+            clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
               color: Colors.grey.shade300,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(Icons.image_outlined, color: Colors.grey),
+            child: item.imageUrl == null
+                ? const Icon(Icons.image_outlined, color: Colors.grey)
+                : Image.network(
+                    item.imageUrl!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) =>
+                        const Icon(Icons.image_outlined, color: Colors.grey),
+                  ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -348,7 +381,7 @@ class _PickupqrpageState extends State<Pickupqrpage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  widget.brand,
+                  item.brand,
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
@@ -357,52 +390,29 @@ class _PickupqrpageState extends State<Pickupqrpage> {
                   ),
                 ),
                 Text(
-                  widget.productName,
+                  item.name,
                   style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  widget.colorLabel,
+                  item.optionLabel,
                   style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                 ),
                 const SizedBox(height: 6),
                 Row(
                   children: [
                     Text(
-                      _formatWon(widget.price),
+                      formatWon(item.price),
                       style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      '수령 ${widget.quantity}',
+                      '수령 ${item.quantity}',
                       style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
                     ),
                   ],
                 ),
               ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMockNotice() {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFF4E0),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.info_outline, size: 18, color: Color(0xFFB7791F)),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              '실제 서비스에서는 서버 검증을 거친 일회성 인증번호를 사용합니다. 이 QR은 인증 기능이 없는 목업입니다.',
-              style: TextStyle(fontSize: 12, color: Colors.brown.shade700),
             ),
           ),
         ],
