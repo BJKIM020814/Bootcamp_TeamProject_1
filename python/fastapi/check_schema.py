@@ -7,7 +7,10 @@ EXPECTED = {
     'product': {'p_code', 'p_name', 'b_name'},
     'purchase': {'customer_customer_id', 'p_code'},
     'review': {'customer_customer_id', 'product_p_code', 'review_seq', 'r_date', 'image', 'context', 'r_fit', 'rating', 'likecount'},
-    'contact': {'contact_seq', 'context', 'c_date', 'response', 'r_date', 'process', 'customer_customer_id', 'head_office_id'},
+    'customer_support_inquiry': {'inquiry_id', 'customer_id', 'head_office_id', 'content', 'response',
+                                 'created_at', 'responded_at', 'process'},
+    'inquiry_message': {'message_id', 'customer_id', 'head_office_id', 'c_seq', 'turn_index',
+                        'parent_message_id', 'author_role', 'author_id', 'content', 'created_at'},
 }
 
 
@@ -24,7 +27,8 @@ def check():
             'customer': ['customer_id'], 'product': ['p_code'],
             'purchase': ['customer_customer_id', 'p_code'],
             'review': ['customer_customer_id', 'product_p_code'],
-            'contact': ['customer_customer_id'],
+            'customer_support_inquiry': ['customer_id', 'head_office_id'],
+            'inquiry_message': ['customer_id', 'head_office_id', 'author_id'],
         }
         for key in string_keys[table]:
             if key in columns and columns[key]['data_type'] not in {'char', 'varchar', 'text'}:
@@ -33,9 +37,10 @@ def check():
             length = columns['context']['max_length']
             if length is not None and length < 2000:
                 problems.append('review.context: 2000자 저장 공간 필요')
-        if table == 'contact' and 'r_date' in columns and columns['r_date']['nullable'] != 'YES':
-            problems.append('contact.r_date: 미답변 상태를 위해 NULL 허용 필요')
-        identity = {'review': 'review_seq', 'contact': 'contact_seq'}.get(table)
+        if table == 'customer_support_inquiry' and 'responded_at' in columns and columns['responded_at']['nullable'] != 'YES':
+            problems.append('customer_support_inquiry.responded_at: 미답변 상태를 위해 NULL 허용 필요')
+        identity = {'review': 'review_seq', 'customer_support_inquiry': 'inquiry_id',
+                    'inquiry_message': 'message_id'}.get(table)
         if identity in columns and 'auto_increment' not in columns[identity]['extra']:
             problems.append(f'{table}.{identity}: AUTO_INCREMENT 필요')
     return problems

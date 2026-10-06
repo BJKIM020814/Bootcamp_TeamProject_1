@@ -227,6 +227,14 @@ class FitpickApiService {
   /// MySQL contact.context 길이에 맞춰 문의를 접수한다(현재 최대 50자).
   Future<Map<String, dynamic>> writeContact(String content) =>
       _request('POST', '/support/contacts', body: {'content': content});
+
+  /// 기존 문의 스레드에 고객의 추가 메시지를 연결한다.
+  Future<Map<String, dynamic>> replyToContact(int id, String content) =>
+      _request(
+        'POST',
+        '/support/contacts/$id/messages',
+        body: {'content': content},
+      );
   void dispose() => _client.close();
 }
 

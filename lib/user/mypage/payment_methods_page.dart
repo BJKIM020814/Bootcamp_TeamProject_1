@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:bootcamp_teamproject_1/common/fitpick_snackbar.dart';
 
 import 'package:bootcamp_teamproject_1/services/mypage_api.dart';
 import 'package:bootcamp_teamproject_1/user/authController.dart';
@@ -25,9 +26,7 @@ class _PaymentMethodsPageState extends State<PaymentMethodsPage> {
 
   String? get _customerId => AuthController.to.customerId.value;
 
-  void _toast(String message) => ScaffoldMessenger.of(
-    context,
-  ).showSnackBar(SnackBar(content: Text(message)));
+  void _toast(String message) => showFitpickSnackbar(message);
 
   /// 서버에 저장된 기본 결제수단을 선택 상태로 반영한다.
   Future<void> _loadSelected() async {

@@ -177,24 +177,35 @@ def available_coupons(customer_id):
 
 
 # ---------- 주문 ----------
-_ORDER_COLUMNS = (
-    "order_number, customer_id, orderer_name, orderer_phone, dealer_seq, store_name, store_address, "
-    "payment_method, coupon_id, coupon_name, subtotal, discount, paid_amount, status, ordered_at, "
-    "status_changed_at, ready_at, picked_up_at, cancelled_at"
+# purchase_order / purchase_order_item 은 기준 주문 데이터이며 상세 화면 전용 값은 확장 행에 보관한다.
+_ORDER_SELECT = (
+    "po.order_id, d.order_code AS order_number, po.customer_id, d.orderer_name, d.orderer_phone, "
+    "d.dealer_seq, d.store_name, d.store_address, d.payment_method, d.coupon_id, d.coupon_name, "
+    "d.subtotal, d.discount, po.total_amount AS paid_amount, po.status, po.ordered_at, "
+    "d.status_changed_at, d.ready_at, d.picked_up_at, d.cancelled_at, d.pickup_code, "
+    "d.pickup_code_expires, po.head_office_id"
 )
+_ORDER_FROM = "purchase_order po JOIN purchase_order_detail d ON d.order_id = po.order_id"
 _ITEM_COLUMNS = (
-    "i.order_item_id, i.order_number, i.p_code, i.p_name, i.b_name, i.p_color, i.p_size, "
+    "i.order_item_id, d.order_code AS order_number, i.p_code, p.p_name, p.b_name, p.p_color, p.p_size, "
     "i.unit_price, i.quantity, OCTET_LENGTH(p.p_image) AS image_bytes"
 )
 
 
-def _next_order_number(cur, now):
-    prefix = f"FP{now:%y%m%d}-"
-    cur.execute("SELECT order_number FROM shop_order WHERE order_number LIKE %s "
-                "ORDER BY LENGTH(order_number) DESC, order_number DESC LIMIT 1 FOR UPDATE", (prefix + "%",))
-    row = cur.fetchone()
-    seq = int(row["order_number"][len(prefix):]) + 1 if row else 1
-    return f"{prefix}{seq:03d}"
+def _resolve_head_office(cur):
+    """주문 기준 본사는 명시 설정을 우선하고, 없으면 유일한 물류본부 행을 사용한다."""
+    configured = os.getenv("ORDER_HEAD_OFFICE_ID")
+    if configured:
+        cur.execute("SELECT id FROM head_office WHERE id = %s", (configured,))
+        row = cur.fetchone()
+        if row:
+            return row["id"]
+        raise OrderError(503, "ORDER_HEAD_OFFICE_INVALID", "ORDER_HEAD_OFFICE_ID가 head_office에 등록되어 있지 않습니다.")
+    cur.execute("SELECT id FROM head_office WHERE division = %s ORDER BY id LIMIT 2", ("물류본부",))
+    rows = cur.fetchall()
+    if len(rows) == 1:
+        return rows[0]["id"]
+    raise OrderError(503, "ORDER_HEAD_OFFICE_REQUIRED", "주문을 처리할 물류본부(head_office)를 확인할 수 없습니다.")
 
 
 def create_order(customer_id, data, payment_methods):
@@ -203,27 +214,41 @@ def create_order(customer_id, data, payment_methods):
     if data.payment_method not in payment_methods:
         raise OrderError(422, "INVALID_PAYMENT_METHOD", "지원하지 않는 결제수단입니다.")
     now = datetime.now()
+    with get_local().connection() as conn:
+        cart_rows = [dict(row) for row in conn.execute(
+            "SELECT cart_item_id, p_code, quantity FROM cart_items "
+            "WHERE customer_id = ? AND selected = 1 ORDER BY cart_item_id", (customer_id,)
+        ).fetchall()]
+    if not cart_rows:
+        raise OrderError(409, "CART_EMPTY", "주문할 상품을 장바구니에서 선택해 주세요.")
+
     with _transaction() as cur:
-        # 장바구니 행을 잠가 같은 상품이 두 번 주문되지 않게 한다.
-        cur.execute(f"SELECT {_CART_COLUMNS} FROM cart_item c JOIN product p ON p.p_code = c.p_code "
-                    "WHERE c.customer_id = %s AND c.selected = 1 ORDER BY c.cart_item_id FOR UPDATE",
-                    (customer_id,))
-        items = cur.fetchall()
-        if not items:
-            raise OrderError(409, "CART_EMPTY", "주문할 상품을 장바구니에서 선택해 주세요.")
+        # SQLite 장바구니의 선택 상품코드와 MySQL 상품행을 대조해 가격·옵션을 서버에서 다시 읽는다.
+        codes = [row["p_code"] for row in cart_rows]
+        marks = ", ".join(["%s"] * len(codes))
+        cur.execute("SELECT p_code, p_name, b_name, p_price, p_color, p_size "
+                    f"FROM product WHERE p_code IN ({marks}) FOR UPDATE", codes)
+        product_rows = {row["p_code"]: row for row in cur.fetchall()}
+        items = [{**product_rows[row["p_code"]], **row} for row in cart_rows if row["p_code"] in product_rows]
+        if len(items) != len(cart_rows):
+            raise OrderError(409, "CART_PRODUCT_UNAVAILABLE", "장바구니에 현재 판매되지 않는 상품이 포함되어 있습니다.")
 
         dealer_seq = data.dealer_seq
         if dealer_seq is None:
-            cur.execute("SELECT COALESCE((SELECT dealer_seq FROM cart_pickup WHERE customer_id = %s), "
-                        "(SELECT favorite_dealer_seq FROM customer_setting WHERE customer_id = %s)) AS seq",
-                        (customer_id, customer_id))
-            dealer_seq = cur.fetchone()["seq"]
+            with get_local().connection() as conn:
+                selected_store = conn.execute("SELECT dealer_seq FROM cart_pickups WHERE customer_id = ?",
+                                              (customer_id,)).fetchone()
+            dealer_seq = selected_store["dealer_seq"] if selected_store else None
+            if dealer_seq is None:
+                cur.execute("SELECT favorite_dealer_seq FROM customer_setting WHERE customer_id = %s", (customer_id,))
+                setting = cur.fetchone()
+                dealer_seq = setting["favorite_dealer_seq"] if setting else None
         cur.execute("SELECT seq, name, address FROM authorized_dealer WHERE seq = %s", (dealer_seq,))
         dealer = cur.fetchone() if dealer_seq else None
         if dealer is None:
             raise OrderError(422, "STORE_REQUIRED", "수령 매장을 선택해 주세요.")
 
-        subtotal = sum(int(row["p_price"]) * row["quantity"] for row in items)
+        subtotal = sum(int(str(row["p_price"]).replace(",", "")) * row["quantity"] for row in items)
         discount, coupon_name = 0, None
         if data.coupon_id is not None:
             cur.execute("SELECT c.name, c.discount_type, c.discount_value FROM customer_coupon cc "
@@ -237,24 +262,31 @@ def create_order(customer_id, data, payment_methods):
             cur.execute("UPDATE customer_coupon SET used_at = %s WHERE customer_id = %s AND coupon_id = %s",
                         (now, customer_id, data.coupon_id))
 
-        order_number = _next_order_number(cur, now)
+        head_office_id = _resolve_head_office(cur)
         cur.execute(
-            "INSERT INTO shop_order (order_number, customer_id, orderer_name, orderer_phone, dealer_seq, "
-            "store_name, store_address, payment_method, coupon_id, coupon_name, subtotal, discount, paid_amount, "
-            "status, ordered_at, status_changed_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'PAID',%s,%s)",
-            (order_number, customer_id, data.orderer_name, data.orderer_phone, dealer["seq"], dealer["name"],
-            dealer["address"], data.payment_method, data.coupon_id, coupon_name, subtotal, discount,
-            subtotal - discount, now, now),
+            "INSERT INTO purchase_order (customer_id, head_office_id, ordered_at, total_amount, status) "
+            "VALUES (%s,%s,%s,%s,'PAID')",
+            (customer_id, head_office_id, now, subtotal - discount),
+        )
+        order_id = cur.lastrowid
+        order_number = f"FP{order_id}"
+        cur.execute(
+            "INSERT INTO purchase_order_detail (order_id, order_code, orderer_name, orderer_phone, dealer_seq, "
+            "store_name, store_address, payment_method, coupon_id, coupon_name, subtotal, discount, status_changed_at) "
+            "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+            (order_id, order_number, data.orderer_name, data.orderer_phone, dealer["seq"], dealer["name"],
+             dealer["address"], data.payment_method, data.coupon_id, coupon_name, subtotal, discount, now),
         )
         cur.executemany(
-            "INSERT INTO shop_order_item (order_number, p_code, p_name, b_name, p_color, p_size, unit_price, quantity) "
-            "VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
-            [(order_number, row["p_code"], row["p_name"], row["b_name"], row["p_color"] or None,
-            row["p_size"] or None, int(row["p_price"]), row["quantity"]) for row in items],
+            "INSERT INTO purchase_order_item (order_id, p_code, quantity, unit_price) VALUES (%s,%s,%s,%s)",
+            [(order_id, row["p_code"], row["quantity"], int(str(row["p_price"]).replace(",", "")))
+             for row in items],
         )
-        marks = ", ".join(["%s"] * len(items))
-        cur.execute(f"DELETE FROM cart_item WHERE customer_id = %s AND cart_item_id IN ({marks})",
-                    (customer_id, *[row["cart_item_id"] for row in items]))
+    # MySQL 주문 커밋이 완료된 뒤에만 SQLite 장바구니를 비운다.
+    with get_local().connection() as conn:
+        marks = ",".join(["?"] * len(cart_rows))
+        conn.execute(f"DELETE FROM cart_items WHERE customer_id = ? AND cart_item_id IN ({marks})",
+                     (customer_id, *[row["cart_item_id"] for row in cart_rows]))
     return order_number
 
 
@@ -267,11 +299,11 @@ _STATUS_GROUPS = {
 
 
 def list_orders(customer_id, group, limit, offset):
-    where = _STATUS_GROUPS.get(group, "1 = 1")
-    total = db.query_one(f"SELECT COUNT(*) AS total FROM shop_order WHERE customer_id = %s AND {where}",
+    where = _STATUS_GROUPS.get(group, "1 = 1").replace("status", "po.status")
+    total = db.query_one(f"SELECT COUNT(*) AS total FROM {_ORDER_FROM} WHERE po.customer_id = %s AND {where}",
                         (customer_id,))["total"]
-    orders = db.query(f"SELECT {_ORDER_COLUMNS} FROM shop_order WHERE customer_id = %s AND {where} "
-                    "ORDER BY ordered_at DESC, order_number DESC LIMIT %s OFFSET %s",
+    orders = db.query(f"SELECT {_ORDER_SELECT} FROM {_ORDER_FROM} WHERE po.customer_id = %s AND {where} "
+                    "ORDER BY po.ordered_at DESC, po.order_id DESC LIMIT %s OFFSET %s",
                     (customer_id, limit, offset))
     return orders, _items_by_order([row["order_number"] for row in orders]), total
 
@@ -280,8 +312,10 @@ def _items_by_order(order_numbers):
     if not order_numbers:
         return {}
     marks = ", ".join(["%s"] * len(order_numbers))
-    rows = db.query(f"SELECT {_ITEM_COLUMNS} FROM shop_order_item i LEFT JOIN product p ON p.p_code = i.p_code "
-                    f"WHERE i.order_number IN ({marks}) ORDER BY i.order_item_id", order_numbers)
+    rows = db.query(f"SELECT {_ITEM_COLUMNS} FROM purchase_order_item i "
+                    "JOIN purchase_order_detail d ON d.order_id = i.order_id "
+                    "LEFT JOIN product p ON p.p_code = i.p_code "
+                    f"WHERE d.order_code IN ({marks}) ORDER BY i.order_item_id", order_numbers)
     result = {}
     for row in rows:
         result.setdefault(row["order_number"], []).append(row)
@@ -290,18 +324,18 @@ def _items_by_order(order_numbers):
 
 def get_order(customer_id, order_number):
     """회원 API 는 주문번호만으로 찾지 않고 회원 조건을 함께 건다. (타인 주문은 404, None 은 본사 처리용)"""
-    order = db.query_one(f"SELECT {_ORDER_COLUMNS} FROM shop_order WHERE order_number = %s "
-                        "AND (%s IS NULL OR customer_id = %s)", (order_number, customer_id, customer_id))
+    order = db.query_one(f"SELECT {_ORDER_SELECT} FROM {_ORDER_FROM} WHERE d.order_code = %s "
+                        "AND (%s IS NULL OR po.customer_id = %s)", (order_number, customer_id, customer_id))
     if order is None:
         raise OrderError(404, "ORDER_NOT_FOUND", "주문을 찾을 수 없습니다.")
     return order, _items_by_order([order_number]).get(order_number, [])
 
 
 def _lock_order(cur, order_number, customer_id=None):
-    sql = f"SELECT {_ORDER_COLUMNS} FROM shop_order WHERE order_number = %s"
+    sql = f"SELECT {_ORDER_SELECT} FROM {_ORDER_FROM} WHERE d.order_code = %s"
     params = [order_number]
     if customer_id is not None:
-        sql += " AND customer_id = %s"
+        sql += " AND po.customer_id = %s"
         params.append(customer_id)
     cur.execute(sql + " FOR UPDATE", params)
     order = cur.fetchone()
@@ -316,8 +350,10 @@ def cancel_order(customer_id, order_number):
         order = _lock_order(cur, order_number, customer_id)
         if order["status"] not in CANCELLABLE:
             raise OrderError(409, "ORDER_NOT_CANCELLABLE", "본사에서 발송을 시작한 주문은 취소할 수 없습니다.")
-        cur.execute("UPDATE shop_order SET status = 'CANCELLED', status_changed_at = %s, cancelled_at = %s, "
-                    "pickup_code = NULL, pickup_code_expires = NULL WHERE order_number = %s", (now, now, order_number))
+        cur.execute("UPDATE purchase_order SET status = 'CANCELLED' WHERE order_id = %s", (order["order_id"],))
+        cur.execute("UPDATE purchase_order_detail SET status_changed_at = %s, cancelled_at = %s, "
+                    "pickup_code = NULL, pickup_code_expires = NULL WHERE order_id = %s",
+                    (now, now, order["order_id"]))
         if order["coupon_id"] is not None:
             # 아직 유효기간이 남은 쿠폰은 다시 사용할 수 있게 돌려준다.
             cur.execute("UPDATE customer_coupon SET used_at = NULL WHERE customer_id = %s AND coupon_id = %s "
@@ -332,9 +368,10 @@ def advance_order(order_number, status):
         current = order["status"]
         if current not in ORDER_FLOW or ORDER_FLOW.index(status) != ORDER_FLOW.index(current) + 1:
             raise OrderError(409, "INVALID_STATUS_TRANSITION", f"{current} 상태에서 {status}(으)로 바꿀 수 없습니다.")
-        cur.execute("UPDATE shop_order SET status = %s, status_changed_at = %s, "
-                    "ready_at = IF(%s = 'READY', %s, ready_at) WHERE order_number = %s",
-                    (status, now, status, now, order_number))
+        cur.execute("UPDATE purchase_order SET status = %s WHERE order_id = %s", (status, order["order_id"]))
+        cur.execute("UPDATE purchase_order_detail SET status_changed_at = %s, "
+                    "ready_at = IF(%s = 'READY', %s, ready_at) WHERE order_id = %s",
+                    (now, status, now, order["order_id"]))
 
 
 def issue_pickup_code(customer_id, order_number):
@@ -345,8 +382,8 @@ def issue_pickup_code(customer_id, order_number):
             raise OrderError(409, "ORDER_NOT_READY", "수령 준비가 완료된 주문만 수령 인증을 할 수 있습니다.")
         code = f"{secrets.randbelow(1_000_000):06d}"
         expires = now + timedelta(minutes=PICKUP_CODE_MINUTES)
-        cur.execute("UPDATE shop_order SET pickup_code = %s, pickup_code_expires = %s WHERE order_number = %s",
-                    (code, expires, order_number))
+        cur.execute("UPDATE purchase_order_detail SET pickup_code = %s, pickup_code_expires = %s WHERE order_id = %s",
+                    (code, expires, order["order_id"]))
     return order, code, expires
 
 
@@ -354,8 +391,8 @@ def confirm_pickup(customer_id, order_number, code):
     """수령 완료. 쇼핑 구매내역(purchase)·누적결제금액(totalprice)에도 반영해 리뷰 작성/등급과 연결한다."""
     now = datetime.now()
     with _transaction() as cur:
-        cur.execute(f"SELECT {_ORDER_COLUMNS}, pickup_code, pickup_code_expires FROM shop_order "
-                    "WHERE order_number = %s AND customer_id = %s FOR UPDATE", (order_number, customer_id))
+        cur.execute(f"SELECT {_ORDER_SELECT} FROM {_ORDER_FROM} "
+                    "WHERE d.order_code = %s AND po.customer_id = %s FOR UPDATE", (order_number, customer_id))
         order = cur.fetchone()
         if order is None:
             raise OrderError(404, "ORDER_NOT_FOUND", "주문을 찾을 수 없습니다.")
@@ -364,27 +401,26 @@ def confirm_pickup(customer_id, order_number, code):
         if (not order["pickup_code"] or order["pickup_code_expires"] < now
                 or not secrets.compare_digest(order["pickup_code"], code)):
             raise OrderError(422, "INVALID_PICKUP_CODE", "인증번호가 올바르지 않거나 만료되었습니다.")
-        cur.execute("UPDATE shop_order SET status = 'PICKED_UP', status_changed_at = %s, picked_up_at = %s, "
-                    "pickup_code = NULL, pickup_code_expires = NULL WHERE order_number = %s",
-                    (now, now, order_number))
+        cur.execute("UPDATE purchase_order SET status = 'PICKED_UP' WHERE order_id = %s", (order["order_id"],))
+        cur.execute("UPDATE purchase_order_detail SET status_changed_at = %s, picked_up_at = %s, "
+                    "pickup_code = NULL, pickup_code_expires = NULL WHERE order_id = %s",
+                    (now, now, order["order_id"]))
         cur.execute("UPDATE customer SET totalprice = totalprice + %s WHERE customer_id = %s",
                     (order["paid_amount"], customer_id))
         # purchase.head_office_id 는 실제 head_office FK 값이 필요하므로 설정된 경우에만 기록한다.
-        office = os.getenv("ORDER_HEAD_OFFICE_ID")
-        if office:
-            cur.execute("SELECT p_code, unit_price, quantity FROM shop_order_item WHERE order_number = %s",
-                        (order_number,))
-            cur.executemany(
-                "INSERT IGNORE INTO purchase (customer_customer_id, head_office_id, p_code, p_date, p_price) "
-                "VALUES (%s, %s, %s, %s, %s)",
-                [(customer_id, int(office), row["p_code"], now, row["unit_price"] * row["quantity"])
-                for row in cur.fetchall()],
-            )
+        cur.execute("SELECT p_code, unit_price, quantity FROM purchase_order_item WHERE order_id = %s",
+                    (order["order_id"],))
+        cur.executemany(
+            "INSERT IGNORE INTO purchase (customer_customer_id, head_office_id, p_code, p_date, p_price) "
+            "VALUES (%s, %s, %s, %s, %s)",
+            [(customer_id, order["head_office_id"], row["p_code"], now, row["unit_price"] * row["quantity"])
+             for row in cur.fetchall()],
+        )
 
 
 # ---------- 교환/반품 ----------
 _CLAIM_COLUMNS = (
-    "claim_id, order_number, order_item_id, claim_type, reason, detail, requested_size, store_name, "
+    "claim_id, order_code AS order_number, order_item_id, claim_type, reason, detail, requested_size, store_name, "
     "refund_amount, status, requested_at"
 )
 
@@ -415,8 +451,11 @@ def create_claim(customer_id, data, photos):
         order = _lock_order(cur, data.order_number, customer_id)
         if order["status"] != "PICKED_UP":
             raise OrderError(409, "CLAIM_NOT_ALLOWED", "수령 완료된 주문만 교환·반품을 신청할 수 있습니다.")
-        cur.execute("SELECT order_item_id, p_code, unit_price, quantity, p_size FROM shop_order_item "
-                    "WHERE order_number = %s AND order_item_id = %s", (data.order_number, data.order_item_id))
+        cur.execute("SELECT i.order_item_id, i.p_code, i.unit_price, i.quantity, p.p_size "
+                    "FROM purchase_order_item i JOIN purchase_order_detail d ON d.order_id = i.order_id "
+                    "LEFT JOIN product p ON p.p_code = i.p_code "
+                    "WHERE d.order_code = %s AND i.order_item_id = %s",
+                    (data.order_number, data.order_item_id))
         item = cur.fetchone()
         if item is None:
             raise OrderError(404, "ORDER_ITEM_NOT_FOUND", "주문 상품을 찾을 수 없습니다.")
@@ -430,7 +469,7 @@ def create_claim(customer_id, data, photos):
             raise OrderError(404, "STORE_NOT_FOUND", "방문할 매장을 찾을 수 없습니다.")
         refund = refund_amount(order, item) if data.claim_type == "RETURN" else 0
         cur.execute(
-            "INSERT INTO order_claim (order_number, order_item_id, customer_id, claim_type, reason, detail, "
+            "INSERT INTO order_claim (order_code, order_item_id, customer_id, claim_type, reason, detail, "
             "requested_size, dealer_seq, store_name, refund_amount, status, requested_at, updated_at) "
             "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'RECEIVED',%s,%s)",
             (data.order_number, data.order_item_id, customer_id, data.claim_type, data.reason, data.detail,
@@ -458,7 +497,9 @@ def list_claims(customer_id, claim_type=None, claim_id=None):
         return [], {}, {}
     marks = ", ".join(["%s"] * len(claims))
     item_ids = [row["order_item_id"] for row in claims]
-    items = db.query(f"SELECT {_ITEM_COLUMNS} FROM shop_order_item i LEFT JOIN product p ON p.p_code = i.p_code "
+    items = db.query(f"SELECT {_ITEM_COLUMNS} FROM purchase_order_item i "
+                    "JOIN purchase_order_detail d ON d.order_id = i.order_id "
+                    "LEFT JOIN product p ON p.p_code = i.p_code "
                     f"WHERE i.order_item_id IN ({marks})", item_ids)
     photos = {}
     for row in db.query(f"SELECT photo_id, claim_id FROM order_claim_photo WHERE claim_id IN ({marks}) "

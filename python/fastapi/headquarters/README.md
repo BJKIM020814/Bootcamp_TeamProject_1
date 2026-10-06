@@ -10,8 +10,8 @@
 
 | 화면 | 메서드·경로 | 데이터 |
 |---|---|---|
-| 주문관리 | `GET /api/v1/headquarters/orders` | MySQL `purchase` + 상품코드로 `product` 조인 |
-| 주문 상세 | `GET /api/v1/headquarters/orders/{customer_id}/{head_office_id}/{product_code}` | purchase 복합키 |
+| 주문관리 | `GET /api/v1/headquarters/orders` | 결제 직후 생성되는 `purchase_order` + `purchase_order_item` + 상품 |
+| 주문 상세 | `GET /api/v1/headquarters/orders/by-number/{order_number}` | 주문번호로 주문의 모든 상품 줄 조회 |
 | 재고관리 | `GET /api/v1/headquarters/inventory` | Firestore `office_inventory` + MySQL `product` |
 | 재고 조정 | `POST /api/v1/headquarters/inventory/{product_code}/adjustments` | 현재고 기준/상품 연결 입출고 원장이 없어 501 |
 | 결재관리 | `GET, POST /api/v1/headquarters/approvals` | Firestore `procurement_approval` (신규 API 소유 컬렉션) |
@@ -21,12 +21,14 @@
 | 대리점 상세 | `GET /api/v1/headquarters/branches/{branch_id}` | MySQL `authorized_dealer.seq` |
 | 계약관리 | `GET /api/v1/headquarters/contracts` | MySQL `contract`, `contraction`, `model`, `termination` |
 | 계약 상세 | `GET /api/v1/headquarters/contracts/{head_office_id}/{model_id}/{contract_sequence}` | 계약 복합키 |
+| 문의 답변 | `PATCH /api/v1/headquarters/inquiries/answer?customer_id=...&head_office_id=...&c_seq=...` | JSON `{"answer":"답변 내용"}`; `inquiry_message`에 새 대화 turn 추가 |
 
 요청에서 쓸 주문 ID는 별도 컬럼이 없어서 복합키이며, 값은 목록 조회에서 얻습니다. Swagger 문서의 schemas와 각 경로 summary를 참고하세요. 조회 응답은 실제 행만 반환하며 빈 테이블은 빈 `items`입니다.
 
 ## 확인된 제약 / 데이터 작업 필요
 
-- `purchase`에는 주문 수량, 배송/수령 상태, 대리점, 결제 상세가 없습니다. `pickup`은 고객+대리점까지만 연결되고 상품 주문 키가 없어 특정 구매행과 결합할 수 없습니다. 주문 응답에서 이 필드들은 null/불가 목록으로 표시하며 배송 상태 변경 API는 만들지 않았습니다.
+- 주문 접수 즉시 관리자 주문 목록에 보이도록 `purchase_order` 계열 테이블을 주문 원본으로 사용합니다. 레거시 `purchase`는 고객+본사 복합 기본키라 반복 주문/여러 상품을 안전하게 기록할 수 없으며, 수령 완료 시 리뷰/구매 이력 호환용으로만 반영됩니다.
+- 배송 상세 상태는 별도 배송 관계가 없어 아직 제공하지 않습니다. 픽업 진행 상태·수량·대리점·결제수단은 `purchase_order`, `purchase_order_item`, `purchase_order_detail`에서 조회합니다.
 - 환불 집계는 구매 회원 ID와 `p_return.p_id = purchase.p_code` 및 `refund=1`을 이용합니다. 반품 스키마에 주문/head-office 키가 없어 같은 고객의 동일 상품 재구매 건을 구별할 수 없습니다. 정확한 주문 단위 환불 차감에는 주문 ID 관계가 필요합니다.
 - `office_inventory`에는 최소수량만 있고 검증된 현재고 수량이 없습니다. `registration`은 재고 수량 기록, `recieve`는 입고 수량, `send`는 수량을 가지나 `send`에 productId가 없습니다. 그러므로 현재고 숫자/발주 필요 여부는 기준수량·원장 의미가 확정된 상품만 계산되어야 합니다. 현재 응답은 미설정이면 null입니다.
 - 결재 컬렉션은 기존 ERD에 없어 이 API가 `procurement_approval`을 새로 소유합니다. 견적 `quotation`에는 상품코드와 제조사 ID 연결이 보장되지 않아 안전한 품의 생성/최종 발주가 차단될 수 있습니다. 견적 레코드에 `productId`, `manufacturerId`를 연결해야 합니다. 최종승인 시 중복 없는 발주 생성도 이 관계가 먼저 필요합니다.

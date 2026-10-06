@@ -1,4 +1,5 @@
 import 'package:bootcamp_teamproject_1/discover/discover_api.dart';
+import 'package:bootcamp_teamproject_1/common/fitpick_snackbar.dart';
 import 'package:bootcamp_teamproject_1/discover/store_selection_page.dart';
 import 'package:bootcamp_teamproject_1/order/cartController.dart';
 import 'package:bootcamp_teamproject_1/order/cartPage.dart';
@@ -75,23 +76,19 @@ class SizeSelectionPage extends StatelessWidget {
     final cart = CartController.to;
     if (!await cart.addProduct(product.code)) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(cart.errorMessage.value ?? '상품을 장바구니에 담지 못했습니다.'),
-          ),
+        showFitpickSnackbar(
+          cart.errorMessage.value ?? '상품을 장바구니에 담지 못했습니다.',
+          title: '오류',
         );
       }
       return;
     }
     if (!await cart.updateStore(store.id)) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              cart.errorMessage.value ??
-                  '상품은 담았지만 수령 매장을 지정하지 못했습니다. 장바구니에서 매장을 다시 선택해 주세요.',
-            ),
-          ),
+        showFitpickSnackbar(
+          cart.errorMessage.value ??
+              '상품은 담았지만 수령 매장을 지정하지 못했습니다. 장바구니에서 매장을 다시 선택해 주세요.',
+          title: '오류',
         );
       }
       return;

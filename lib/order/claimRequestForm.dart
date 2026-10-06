@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:bootcamp_teamproject_1/common/fitpick_snackbar.dart';
 import 'package:bootcamp_teamproject_1/order/cartPage.dart';
 import 'package:bootcamp_teamproject_1/order/exchangeHistoryPage.dart';
 import 'package:bootcamp_teamproject_1/order/orderApi.dart';
@@ -105,7 +106,7 @@ class _ClaimRequestFormState extends State<ClaimRequestForm> {
   }
 
   void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    showFitpickSnackbar(message, title: '오류');
   }
 
   Future<void> _submit() async {
@@ -193,7 +194,10 @@ class _ClaimRequestFormState extends State<ClaimRequestForm> {
                           const SizedBox(height: 8),
                           Text(
                             '본사에서 교환 상품을 준비한 뒤 수령 매장으로 발송합니다.',
-                            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade600,
+                            ),
                           ),
                         ],
                         const SizedBox(height: 24),
@@ -203,7 +207,10 @@ class _ClaimRequestFormState extends State<ClaimRequestForm> {
                         const SizedBox(height: 8),
                         Text(
                           'JPG, PNG, WEBP · 최대 ${options.maxPhotos}장 · 각 5MB 이하',
-                          style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey.shade500,
+                          ),
                         ),
                         const SizedBox(height: 24),
                         _sectionTitle('방문 매장'),
@@ -223,7 +230,10 @@ class _ClaimRequestFormState extends State<ClaimRequestForm> {
                           ),
                           child: Text(
                             '신청 접수 → 본사 확인 → 매장 방문·상품 확인 → ${widget.isExchange ? '교환' : '환불'} 완료 순서로 진행됩니다.',
-                            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade600,
+                            ),
                           ),
                         ),
                       ],
@@ -323,7 +333,10 @@ class _ClaimRequestFormState extends State<ClaimRequestForm> {
                 ),
                 Text(
                   item.name,
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -335,12 +348,18 @@ class _ClaimRequestFormState extends State<ClaimRequestForm> {
                   children: [
                     Text(
                       formatWon(item.price),
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(width: 8),
                     Text(
                       '수량 ${item.quantity}',
-                      style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade500,
+                      ),
                     ),
                   ],
                 ),

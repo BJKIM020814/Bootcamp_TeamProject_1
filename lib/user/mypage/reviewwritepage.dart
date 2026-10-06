@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import '../../common/fitpick_snackbar.dart';
 import 'fitpick_mypage_ui.dart';
 
 /// 09. 리뷰 작성
@@ -27,9 +27,7 @@ class _ReviewWritePageState extends State<ReviewWritePage> {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     FocusScope.of(context).unfocus();
     // 입력값 검증까지만 수행한다. API 호출이나 리뷰 저장은 연결되어 있지 않다.
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('리뷰 데이터 모델 연결 후 등록할 수 있습니다.')));
+    showFitpickSnackbar('리뷰 데이터 모델 연결 후 등록할 수 있습니다.');
   }
 
   @override

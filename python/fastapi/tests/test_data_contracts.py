@@ -148,6 +148,78 @@ def test_cart_storage_is_sqlite_and_does_not_require_mysql_order_tables(tmp_path
     assert order.repository.list_cart('buyer@example.com', selected_only=True) == []
 
 
+def test_mock_checkout_writes_purchase_order_schema_and_clears_sqlite_cart(tmp_path, monkeypatch):
+    from contextlib import contextmanager
+    from python.fastapi.order.schemas import OrderCreate
+
+    local = LocalStore(tmp_path / 'purchase-order-test.sqlite3')
+    local.initialize()
+    with local.connection() as conn:
+        conn.execute(
+            "INSERT INTO cart_items (customer_id,p_code,quantity,selected) VALUES (?,?,?,1)",
+            ('buyer@example.com', 'P1002', 2),
+        )
+
+    class Cursor:
+        def __init__(self):
+            self.rows, self.lastrowid, self.statements = [], 73, []
+
+        def execute(self, sql, params=None):
+            self.statements.append((sql, params))
+            if 'FROM product WHERE p_code IN' in sql:
+                self.rows = [{'p_code': 'P1002', 'p_name': 'Runner', 'b_name': 'Brand',
+                              'p_price': '129,000', 'p_color': 'White', 'p_size': 250}]
+            elif 'FROM authorized_dealer WHERE seq' in sql:
+                self.rows = [{'seq': 2, 'name': 'Central Store', 'address': 'Seoul'}]
+            elif 'FROM head_office WHERE division' in sql:
+                self.rows = [{'id': 'HQ003'}]
+            else:
+                self.rows = []
+
+        def executemany(self, sql, rows):
+            self.statements.append((sql, list(rows)))
+
+        def fetchall(self):
+            return self.rows
+
+        def fetchone(self):
+            return self.rows[0] if self.rows else None
+
+    cursor = Cursor()
+
+    @contextmanager
+    def fake_transaction():
+        yield cursor
+
+    monkeypatch.setattr(order.repository, 'get_local', lambda: local)
+    monkeypatch.setattr(order.repository, '_transaction', fake_transaction)
+    payload = OrderCreate(
+        customer_id='buyer@example.com', orderer_name='Buyer', orderer_phone='010-1234-5678',
+        payment_method='신용 / 체크카드', dealer_seq=2, agreed=True,
+    )
+
+    order_code = order.repository.create_order(
+        'buyer@example.com', payload, ['신용 / 체크카드'],
+    )
+
+    sql = '\n'.join(statement for statement, _ in cursor.statements)
+    assert order_code == 'FP73'
+    assert 'INSERT INTO purchase_order (' in sql
+    assert 'INSERT INTO purchase_order_detail (' in sql
+    assert 'INSERT INTO purchase_order_item (' in sql
+    assert 'shop_order' not in sql
+    order_params = next(params for statement, params in cursor.statements
+                        if statement.startswith('INSERT INTO purchase_order ('))
+    assert order_params[:2] == ('buyer@example.com', 'HQ003')
+    assert order_params[2] is not None
+    assert order_params[3] == 258000
+    item_rows = next(rows for statement, rows in cursor.statements
+                     if statement.startswith('INSERT INTO purchase_order_item'))
+    assert item_rows == [(73, 'P1002', 2, 129000)]
+    with local.connection() as conn:
+        assert conn.execute('SELECT COUNT(*) FROM cart_items').fetchone()[0] == 0
+
+
 def test_cart_api_no_longer_checks_mysql_order_schema(client, monkeypatch):
     monkeypatch.setattr(md, 'ensure_customer', lambda *_: None)
 

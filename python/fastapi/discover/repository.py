@@ -13,7 +13,7 @@ _PRODUCT_COLUMNS = (
 )
 
 
-def _where(brand: Optional[str], gender: Optional[str], keyword: Optional[str]):
+def _where(brand: Optional[str], gender: Optional[str], keyword: Optional[str], purpose: Optional[str] = None):
     clauses, params = ["1 = 1"], []
     if brand:
         clauses.append("b_name = %s")
@@ -21,6 +21,13 @@ def _where(brand: Optional[str], gender: Optional[str], keyword: Optional[str]):
     if gender:
         clauses.append("p_gender = %s")
         params.append(gender)
+    if purpose:
+        clauses.append(
+            "p_code IN (SELECT pp.p_code FROM product_purpose pp "
+            "JOIN purpose pu ON pu.purpose_id = pp.purpose_id "
+            "WHERE pu.purpose_name = %s)"
+        )
+        params.append(purpose)
     if keyword:
         clauses.append("(p_name LIKE %s OR b_name LIKE %s OR p_code LIKE %s)")
         value = f"%{keyword}%"
@@ -28,8 +35,8 @@ def _where(brand: Optional[str], gender: Optional[str], keyword: Optional[str]):
     return " AND ".join(clauses), params
 
 
-def list_products(brand=None, gender=None, keyword=None, limit=20, offset=0):
-    where, params = _where(brand, gender, keyword)
+def list_products(brand=None, gender=None, keyword=None, limit=20, offset=0, purpose=None):
+    where, params = _where(brand, gender, keyword, purpose)
     total = db.query_one(f"SELECT COUNT(*) AS total FROM product WHERE {where}", params)["total"]
     rows = db.query(
         f"SELECT {_PRODUCT_COLUMNS} FROM product WHERE {where} "
@@ -102,7 +109,13 @@ def list_reviews(product_code, limit, offset):
 def filters():
     brands = [row["b_name"] for row in db.query("SELECT DISTINCT b_name FROM product ORDER BY b_name")]
     genders = [row["p_gender"] for row in db.query("SELECT DISTINCT p_gender FROM product ORDER BY p_gender")]
-    return brands, genders
+    purposes = [row["purpose_name"] for row in db.query(
+        "SELECT DISTINCT pu.purpose_name FROM purpose pu "
+        "JOIN product_purpose pp ON pp.purpose_id = pu.purpose_id "
+        "JOIN product p ON p.p_code = pp.p_code "
+        "ORDER BY pu.purpose_name"
+    )]
+    return brands, genders, purposes
 
 
 def list_pickup_stores(keyword=None):

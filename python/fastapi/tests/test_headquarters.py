@@ -25,7 +25,24 @@ def test_headquarters_routes_are_registered_in_openapi():
     assert status['ok'] is True
     spec = app.openapi()
     assert '/api/v1/headquarters/orders' in spec['paths']
+    assert 'patch' in spec['paths']['/api/v1/headquarters/inquiries/answer']
     assert '본사 · 주문관리' in spec['paths']['/api/v1/headquarters/orders']['get']['tags']
+
+
+def test_headquarters_inquiry_answer_route_appends_staff_reply(client, monkeypatch):
+    from python.fastapi.commerce import Commerce
+    monkeypatch.setattr('python.fastapi.headquarters.inquiries.contact_schema', lambda: None)
+    monkeypatch.setattr(Commerce, 'reply_to_inquiry',
+                        lambda self, customer_id, head_office_id, c_seq, answer, employee_id: {
+                            'id': 13, 'authorRole': 'employee', 'authorId': employee_id,
+                            'content': answer, 'createdAt': datetime(2026, 10, 6), 'turnIndex': 3})
+    response = client.patch(
+        '/api/v1/headquarters/inquiries/answer',
+        params={'customer_id': 'member@example.com', 'head_office_id': 'HQ004', 'c_seq': 9},
+        json={'c_answer': '확인 후 안내드리겠습니다.'})
+    assert response.status_code == 200
+    assert response.json()['message']['authorRole'] == 'employee'
+    assert response.json()['message']['turnIndex'] == 3
 
 
 def test_headquarters_requires_authenticated_employee_mapping():
@@ -47,7 +64,7 @@ def test_headquarters_requires_authenticated_employee_mapping():
     app.dependency_overrides.pop(get_accounts, None)
 
 
-def test_orders_empty_result_and_product_code_binding(client, monkeypatch):
+def test_orders_empty_result_uses_canonical_order_tables(client, monkeypatch):
     calls = []
     def query(sql, params=None):
         calls.append((sql, params))
@@ -57,8 +74,32 @@ def test_orders_empty_result_and_product_code_binding(client, monkeypatch):
     response = client.get('/api/v1/headquarters/orders')
     assert response.status_code == 200
     assert response.json()['items'] == []
-    assert 'quantity' in response.json()['unavailable_fields']
-    assert all('p.p_code=pu.p_code' in sql for sql, _ in calls)
+    assert 'quantity' not in response.json()['unavailable_fields']
+    assert all('purchase_order_item' in sql for sql, _ in calls)
+    assert all('JOIN purchase_order_detail' in sql for sql, _ in calls)
+
+
+def test_orders_return_checkout_row_and_order_identifier(client, monkeypatch):
+    def query(sql, params=None):
+        assert 'purchase_order_item' in sql
+        return [{
+            'customer_id': 'member@example.com', 'head_office_id': 'HQ004',
+            'product_code': 'P1002', 'product_name': '러닝화', 'brand': 'FITPICK',
+            'purchased_at': datetime(2026, 10, 6), 'paid_amount': 10000,
+            'quantity': 1, 'pickup_status': 'PAID', 'dealer_id': 1,
+            'payment_method': '카드', 'coupon_name': None,
+            'order_number': 'FP123', 'order_item_id': 9,
+            'order_status': 'PAID', 'refunded': 0,
+        }]
+    monkeypatch.setattr(db, 'query', query)
+    monkeypatch.setattr(db, 'query_one', lambda *args, **kwargs: {'total': 1})
+    response = client.get('/api/v1/headquarters/orders')
+    assert response.status_code == 200
+    assert response.json()['total'] == 1
+    item = response.json()['items'][0]
+    assert item['order_number'] == 'FP123'
+    assert item['order_status'] == 'PAID'
+    assert item['quantity'] == 1
 
 
 def test_order_detail_invalid_id_returns_404(client, monkeypatch):

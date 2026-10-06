@@ -1,4 +1,5 @@
 import 'package:bootcamp_teamproject_1/order/cartPage.dart';
+import 'package:bootcamp_teamproject_1/common/fitpick_snackbar.dart';
 import 'package:bootcamp_teamproject_1/order/orderApi.dart';
 import 'package:bootcamp_teamproject_1/order/orderDetailPage.dart';
 import 'package:flutter/material.dart';
@@ -52,9 +53,7 @@ class _PickupqrpageState extends State<Pickupqrpage> {
     final code = _code;
     if (code == null || _confirming) return;
     if (_expired) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('인증번호가 만료되어 새로 발급합니다.')),
-      );
+      showFitpickSnackbar('인증번호가 만료되어 새로 발급합니다.');
       _load();
       return;
     }
@@ -64,9 +63,7 @@ class _PickupqrpageState extends State<Pickupqrpage> {
       if (mounted) Navigator.of(context).pop(true);
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.toString())),
-        );
+        showFitpickSnackbar(error.toString(), title: '오류');
       }
     } finally {
       if (mounted) setState(() => _confirming = false);
@@ -111,7 +108,11 @@ class _PickupqrpageState extends State<Pickupqrpage> {
     );
   }
 
-  Widget _buildMessageState(String title, String message, {bool retry = false}) {
+  Widget _buildMessageState(
+    String title,
+    String message, {
+    bool retry = false,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
@@ -183,12 +184,18 @@ class _PickupqrpageState extends State<Pickupqrpage> {
                     const SizedBox(height: 14),
                     const Text(
                       '상품이 준비됐어요!',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 6),
                     Text(
                       '매장 직원에게 수령증을 보여주세요.',
-                      style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey.shade600,
+                      ),
                     ),
                   ],
                 ),
@@ -209,7 +216,10 @@ class _PickupqrpageState extends State<Pickupqrpage> {
                   const Expanded(
                     child: Text(
                       '수령 전 확인해 주세요',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ],
@@ -280,7 +290,10 @@ class _PickupqrpageState extends State<Pickupqrpage> {
               const SizedBox(width: 4),
               Text(
                 order.storeName,
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ],
           ),
@@ -306,7 +319,11 @@ class _PickupqrpageState extends State<Pickupqrpage> {
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: Colors.grey.shade300),
             ),
-            child: Icon(Icons.qr_code_2, size: 160, color: Colors.grey.shade800),
+            child: Icon(
+              Icons.qr_code_2,
+              size: 160,
+              color: Colors.grey.shade800,
+            ),
           ),
           const SizedBox(height: 16),
           Text(
@@ -391,7 +408,10 @@ class _PickupqrpageState extends State<Pickupqrpage> {
                 ),
                 Text(
                   item.name,
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -403,12 +423,18 @@ class _PickupqrpageState extends State<Pickupqrpage> {
                   children: [
                     Text(
                       formatWon(item.price),
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(width: 8),
                     Text(
                       '수령 ${item.quantity}',
-                      style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade500,
+                      ),
                     ),
                   ],
                 ),

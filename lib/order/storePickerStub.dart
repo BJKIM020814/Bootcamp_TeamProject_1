@@ -1,6 +1,6 @@
 import 'package:bootcamp_teamproject_1/discover/discover_api.dart';
+import 'package:bootcamp_teamproject_1/common/fitpick_snackbar.dart';
 import 'package:bootcamp_teamproject_1/discover/store_selection_page.dart';
-import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import 'cartController.dart';
@@ -13,8 +13,9 @@ Future<void> pickAndApplyStore(CartController controller) async {
   if (result == null) return;
   final ok = await controller.updateStore(result.id);
   if (!ok && Get.context != null) {
-    ScaffoldMessenger.of(Get.context!).showSnackBar(
-      SnackBar(content: Text(controller.errorMessage.value ?? '매장을 변경하지 못했습니다.')),
+    showFitpickSnackbar(
+      controller.errorMessage.value ?? '매장을 변경하지 못했습니다.',
+      title: '오류',
     );
   }
 }

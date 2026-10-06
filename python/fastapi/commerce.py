@@ -116,38 +116,152 @@ class Commerce:
             raise HTTPException(404, '리뷰를 찾을 수 없습니다.')
 
     def contacts(self, email, limit, offset):
-        # 소유자의 문의만 조회한다. contact_seq는 개별 문의 식별을 위해 추가가 필요한 키다.
-        rows = db.query('SELECT contact_seq AS id,context AS content,c_date AS createdAt,response,r_date AS respondedAt,process '
-                        'FROM contact WHERE customer_customer_id=%s ORDER BY c_date DESC,contact_seq DESC LIMIT %s OFFSET %s',
+        # 다건 문의와 inquiry_message 대화 스레드를 회원 소유 조건으로 조회한다.
+        rows = db.query('SELECT inquiry_id AS id,customer_id,head_office_id,COALESCE(legacy_c_seq,inquiry_id) AS c_seq,'
+                        'content,created_at AS createdAt,response,responded_at AS respondedAt,process '
+                        'FROM customer_support_inquiry WHERE customer_id=%s '
+                        'ORDER BY created_at DESC,inquiry_id DESC LIMIT %s OFFSET %s',
                         (email, limit, offset))
-        total = db.query_one('SELECT COUNT(*) AS total FROM contact WHERE customer_customer_id=%s', (email,))['total']
+        total = db.query_one('SELECT COUNT(*) AS total FROM customer_support_inquiry WHERE customer_id=%s',
+                             (email,))['total']
+        for row in rows:
+            row['messages'] = self.inquiry_messages(row)
         return {'items': rows, 'total': total, 'limit': limit, 'offset': offset}
 
     def contact(self, email, contact_id):
-        # 응답 내용/응답일/처리상태는 본사 시스템이 MySQL에 기록한 실제 값을 그대로 읽는다.
-        row = db.query_one('SELECT contact_seq AS id,context AS content,c_date AS createdAt,response,r_date AS respondedAt,process '
-                           'FROM contact WHERE customer_customer_id=%s AND contact_seq=%s', (email, contact_id))
+        # 문의 전체 대화와 마지막 답변 요약을 회원 소유 조건으로 가져온다.
+        row = db.query_one('SELECT inquiry_id AS id,customer_id,head_office_id,'
+                           'COALESCE(legacy_c_seq,inquiry_id) AS c_seq,content,created_at AS createdAt,response,'
+                           'responded_at AS respondedAt,process FROM customer_support_inquiry '
+                           'WHERE customer_id=%s AND inquiry_id=%s', (email, contact_id))
         if not row:
             raise HTTPException(404, '문의를 찾을 수 없습니다.')
+        row['messages'] = self.inquiry_messages(row)
         return row
 
-    def create_contact(self, email, data):
-        # 직원 FK는 실제 존재하는 본사 ID를 환경변수로 지정해야 함.
-        # 담당 본사 ID는 환경설정에서 받는다. 클라이언트가 직원 FK나 다른 회원을 지정할 수 없다.
+    @staticmethod
+    def inquiry_messages(inquiry):
+        """메시지가 아직 이전 단건 답변 형식인 문의도 읽기 시 대화 형태로 호환한다."""
+        messages = db.query(
+            'SELECT message_id AS id,author_role AS authorRole,author_id AS authorId,content,'
+            'created_at AS createdAt,turn_index AS turnIndex FROM inquiry_message '
+            'WHERE customer_id=%s AND head_office_id=%s AND c_seq=%s ORDER BY turn_index,message_id',
+            (inquiry['customer_id'], inquiry['head_office_id'], inquiry['c_seq']))
+        if messages:
+            return messages
+        # 이전 문의는 원문/마지막 답변을 가상 메시지로 보여 주며 조회만으로 DB를 수정하지 않는다.
+        result = [{'id': None, 'authorRole': 'customer', 'authorId': inquiry['customer_id'],
+                   'content': inquiry['content'], 'createdAt': inquiry['createdAt'], 'turnIndex': 0}]
+        response = inquiry.get('response')
+        if response:
+            result.append({'id': None, 'authorRole': 'employee', 'authorId': inquiry['head_office_id'],
+                           'content': response, 'createdAt': inquiry.get('respondedAt') or inquiry['createdAt'],
+                           'turnIndex': 1})
+        return result
+
+    def append_customer_message(self, email, inquiry_id, content):
+        """회원 후속 메시지를 직전 메시지에 연결하고 답변 대기 상태로 되돌린다."""
+        with self.transaction() as cur:
+            cur.execute('SELECT * FROM customer_support_inquiry WHERE customer_id=%s AND inquiry_id=%s FOR UPDATE',
+                        (email, inquiry_id))
+            inquiry = cur.fetchone()
+            if not inquiry:
+                raise HTTPException(404, '문의를 찾을 수 없습니다.')
+            seq = inquiry.get('legacy_c_seq') or inquiry['inquiry_id']
+            last = self._last_inquiry_message(cur, inquiry, seq)
+            if last is None:
+                cur.execute('INSERT INTO inquiry_message '
+                            '(customer_id,head_office_id,c_seq,turn_index,parent_message_id,author_role,author_id,content) '
+                            'VALUES (%s,%s,%s,0,NULL,\'customer\',%s,%s)',
+                            (email, inquiry['head_office_id'], seq, email, inquiry['content']))
+                last = {'message_id': cur.lastrowid, 'turn_index': 0}
+            cur.execute('INSERT INTO inquiry_message '
+                        '(customer_id,head_office_id,c_seq,turn_index,parent_message_id,author_role,author_id,content) '
+                        'VALUES (%s,%s,%s,%s,%s,\'customer\',%s,%s)',
+                        (email, inquiry['head_office_id'], seq, last['turn_index'] + 1,
+                         last['message_id'], email, content))
+            message_id = cur.lastrowid
+            cur.execute('UPDATE customer_support_inquiry SET process=0 WHERE inquiry_id=%s',
+                        (inquiry['inquiry_id'],))
+            if inquiry.get('legacy_c_seq') is not None:
+                cur.execute('UPDATE contact SET c_status=0 WHERE customer_customer_id=%s '
+                            'AND head_office_id=%s AND c_seq=%s',
+                            (email, inquiry['head_office_id'], seq))
+        return db.query_one('SELECT message_id AS id,author_role AS authorRole,author_id AS authorId,content,'
+                            'created_at AS createdAt,turn_index AS turnIndex FROM inquiry_message WHERE message_id=%s',
+                            (message_id,))
+
+    @staticmethod
+    def _last_inquiry_message(cur, inquiry, seq):
+        cur.execute('SELECT message_id,turn_index FROM inquiry_message WHERE customer_id=%s '
+                    'AND head_office_id=%s AND c_seq=%s ORDER BY turn_index DESC,message_id DESC LIMIT 1 FOR UPDATE',
+                    (inquiry['customer_id'], inquiry['head_office_id'], seq))
+        return cur.fetchone()
+
+    def reply_to_inquiry(self, customer_id, head_office_id, c_seq, answer, employee_id):
+        """본사 답변을 대화 끝에 추가하고 구형 contact의 마지막 답변 필드도 동기화한다."""
+        with self.transaction() as cur:
+            cur.execute(
+                'SELECT * FROM customer_support_inquiry WHERE customer_id=%s AND head_office_id=%s '
+                'AND ((legacy_c_seq=%s AND legacy_c_seq IS NOT NULL) '
+                'OR (inquiry_id=%s AND legacy_c_seq IS NULL)) FOR UPDATE',
+                (customer_id, head_office_id, c_seq, c_seq))
+            inquiry = cur.fetchone()
+            if not inquiry:
+                raise HTTPException(404, '문의를 찾을 수 없습니다.')
+            seq = inquiry.get('legacy_c_seq') or inquiry['inquiry_id']
+            last = self._last_inquiry_message(cur, inquiry, seq)
+            if last is None:
+                cur.execute('INSERT INTO inquiry_message '
+                            '(customer_id,head_office_id,c_seq,turn_index,parent_message_id,author_role,author_id,content) '
+                            'VALUES (%s,%s,%s,0,NULL,\'customer\',%s,%s)',
+                            (customer_id, head_office_id, seq, customer_id, inquiry['content']))
+                last = {'message_id': cur.lastrowid, 'turn_index': 0}
+            cur.execute('INSERT INTO inquiry_message '
+                        '(customer_id,head_office_id,c_seq,turn_index,parent_message_id,author_role,author_id,content) '
+                        'VALUES (%s,%s,%s,%s,%s,\'employee\',%s,%s)',
+                        (customer_id, head_office_id, seq, last['turn_index'] + 1,
+                         last['message_id'], employee_id, answer))
+            message_id = cur.lastrowid
+            cur.execute('UPDATE customer_support_inquiry SET response=%s,responded_at=UTC_TIMESTAMP(),process=1 '
+                        'WHERE inquiry_id=%s', (answer, inquiry['inquiry_id']))
+            if inquiry.get('legacy_c_seq') is not None:
+                cur.execute('UPDATE contact SET c_answer=%s,c_answerdate=UTC_TIMESTAMP(),c_status=1 '
+                            'WHERE customer_customer_id=%s AND head_office_id=%s AND c_seq=%s',
+                            (answer, customer_id, head_office_id, seq))
+        return db.query_one('SELECT message_id AS id,author_role AS authorRole,author_id AS authorId,content,'
+                            'created_at AS createdAt,turn_index AS turnIndex FROM inquiry_message WHERE message_id=%s',
+                            (message_id,))
+
+    @staticmethod
+    def support_head_office():
+        # 문자열 FK인 head_office.id를 사용한다. 미설정 시 유일한 고객지원본부를 선택한다.
         office = os.getenv('SUPPORT_HEAD_OFFICE_ID')
-        if not office:
-            raise HTTPException(503, '고객센터 담당 본사 ID 설정이 필요합니다.')
-        try:
-            office_id = int(office)
-        except ValueError as exc:
-            raise HTTPException(503, '고객센터 담당 본사 ID는 정수여야 합니다.') from exc
+        if office:
+            row = db.query_one('SELECT id FROM head_office WHERE id=%s', (office,))
+            if row:
+                return row['id']
+            raise HTTPException(503, 'SUPPORT_HEAD_OFFICE_ID가 head_office에 등록되어 있지 않습니다.')
+        rows = db.query('SELECT id FROM head_office WHERE division=%s ORDER BY id LIMIT 2', ('고객지원본부',))
+        if len(rows) == 1:
+            return rows[0]['id']
+        raise HTTPException(503, '고객센터 담당 본사(고객지원본부)를 확인할 수 없습니다.')
+
+    def create_contact(self, email, data):
+        # 고객지원 본사 FK는 클라이언트 입력을 받지 않고 DB의 실제 문자열 ID로 결정한다.
+        office_id = self.support_head_office()
         with self.transaction() as cur:
             cur.execute('SELECT 1 FROM customer WHERE customer_id=%s', (email,))
             if not cur.fetchone():
                 raise HTTPException(409, '먼저 POST /api/signup/sync로 쇼핑 회원정보를 연결해 주세요.')
-            cur.execute('INSERT INTO contact (context,c_date,response,r_date,process,customer_customer_id,head_office_id) '
-                        'VALUES (%s,UTC_TIMESTAMP(),%s,NULL,0,%s,%s)', (data.content, '', email, office_id))
+            cur.execute('INSERT INTO customer_support_inquiry '
+                        '(customer_id,head_office_id,content,created_at,process) '
+                        'VALUES (%s,%s,%s,UTC_TIMESTAMP(),0)', (email, office_id, data.content))
             contact_id = cur.lastrowid
+            cur.execute('INSERT INTO inquiry_message '
+                        '(customer_id,head_office_id,c_seq,turn_index,parent_message_id,author_role,author_id,content) '
+                        'VALUES (%s,%s,%s,0,NULL,\'customer\',%s,%s)',
+                        (email, office_id, contact_id, email, data.content))
         return self.contact(email, contact_id)
 
 

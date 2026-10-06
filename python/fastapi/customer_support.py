@@ -4,15 +4,21 @@ import logging
 from fastapi import APIRouter, Depends, Query
 from .commerce import get_commerce
 from .dependencies import current_email, get_local
-from .schemas import ContactCreate, ContactOut, Page
+from .schemas import ContactCreate, ContactMessageCreate, ContactMessageOut, ContactOut, Page
 from .schema_guard import require_schema
 
 router = APIRouter(prefix='/support', tags=['5. 고객센터'])
 
 
 def contact_schema():
-    # 본사 레거시 contact(c_seq/contact_post/c_answer)와 새 문의 계약을 혼동하지 않는다.
-    require_schema('contact', ['contact_seq', 'context', 'response', 'r_date', 'process'])
+    # 기존 문의 행과 무한 메시지 대화 테이블의 필수 컬럼을 읽기 전용으로 검증한다.
+    require_schema('customer_support_inquiry',
+                   ['inquiry_id', 'customer_id', 'head_office_id', 'content', 'response',
+                    'created_at', 'responded_at', 'process'], auto_increment='inquiry_id')
+    require_schema('inquiry_message',
+                   ['message_id', 'customer_id', 'head_office_id', 'c_seq', 'turn_index',
+                    'parent_message_id', 'author_role', 'author_id', 'content', 'created_at'],
+                   auto_increment='message_id')
 
 
 @router.get('/faqs')
@@ -42,8 +48,8 @@ def contact(contact_id: int, email=Depends(current_email), commerce=Depends(get_
 def create_contact(data: ContactCreate, email=Depends(current_email), commerce=Depends(get_commerce), local=Depends(get_local)):
     # 문의가 MySQL에 저장된 뒤 SQLite 접수 알림을 추가한다. 알림 장애로 문의를 다시 생성하지 않는다.
     contact_schema()
-    require_schema('contact', ['contact_seq', 'context'], auto_increment='contact_seq',
-                   text_lengths={'context': len(data.content)})
+    require_schema('customer_support_inquiry', ['inquiry_id', 'content'],
+                   auto_increment='inquiry_id', text_lengths={'content': len(data.content)})
     result = commerce.create_contact(email, data)
     try:
         local.add_notification(email, 'support', '문의가 접수되었습니다.', f"문의번호 {result['id']}의 답변을 기다려 주세요.")
@@ -51,3 +57,12 @@ def create_contact(data: ContactCreate, email=Depends(current_email), commerce=D
         # 문의는 이미 커밋됨. 부가 알림 장애로 생성 API를 실패시키지 않는다.
         logging.getLogger(__name__).warning('Support notification deferred')
     return result
+
+
+@router.post('/contacts/{contact_id}/messages', status_code=201, response_model=ContactMessageOut,
+             summary='기존 문의에 고객 메시지 추가',
+             description='회원 소유 문의인지 확인하고 직전 메시지에 연결하여 후속 내용을 추가합니다.')
+def reply_contact(contact_id: int, data: ContactMessageCreate,
+                  email=Depends(current_email), commerce=Depends(get_commerce)):
+    contact_schema()
+    return commerce.append_customer_message(email, contact_id, data.content)

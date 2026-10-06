@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:bootcamp_teamproject_1/common/fitpick_snackbar.dart';
 
 import 'package:get/get.dart';
 
@@ -29,9 +30,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
 
   bool _saving = false;
 
-  void _toast(String message) => ScaffoldMessenger.of(
-    context,
-  ).showSnackBar(SnackBar(content: Text(message)));
+  void _toast(String message) => showFitpickSnackbar(message);
 
   /// 입력을 검증한 뒤 계정(Firebase account)의 비밀번호를 변경한다.
   Future<void> _submit() async {

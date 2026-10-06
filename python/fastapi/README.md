@@ -30,6 +30,16 @@ Firebase의 직원 password, 재고/등록/수주/발주 데이터는 이 회원
 이번에 만든 SQLite는 **FastAPI 서버 파일**이고 앱 기기의 sqflite DB와 공유되지 않는다.
 원본 ERD 테이블을 알림으로 재해석하거나 수정하지 않았다.
 
+### 주문/모의 결제 저장 구조
+
+- 기준 주문과 주문상품은 기존 MySQL `purchase_order` / `purchase_order_item`에 저장한다.
+- `purchase_order_detail`은 원본 주문 테이블에 없는 주문자·매장·결제수단·쿠폰·수령 QR 정보를 보완한다.
+- 교환/반품은 `order_claim` / `order_claim_photo`에서 `purchase_order_item.order_item_id`를 참조한다.
+- 고객센터 대화는 `inquiry_message`의 `parent_message_id` 체인으로 이어진다. 본사는 `PATCH /api/v1/headquarters/inquiries/answer?customer_id=...&head_office_id=...&c_seq=...`에 `{ "answer": "..." }`를 보내고, 회원은 `POST /api/support/contacts/{id}/messages`에 `{ "content": "..." }`를 보내 후속 메시지를 남긴다.
+- SQLite `cart_items`는 모의 결제 주문 커밋이 성공한 뒤 선택된 항목만 비운다.
+- DB 관리자가 `python -m python.fastapi.order.init_tables`를 실행해 `order/schema.sql`의 추가 테이블을 설치해야 한다. 기존 테이블/행은 삭제하지 않는다.
+- 주문 본사는 `ORDER_HEAD_OFFICE_ID`가 등록된 값이면 우선 사용하고, 미설정이면 `head_office.division='물류본부'`인 행이 정확히 하나일 때 이를 선택한다.
+
 ## 실행
 
 프로젝트 루트에서 Python 3.9 이상으로 실행한다. 신규 환경은 Python 3.11 이상 권장.
@@ -52,7 +62,8 @@ uvicorn python.fastapi.main:app --reload --host 0.0.0.0 --port 8000
 - Python SDK 인증은 Google ADC 또는 `GOOGLE_APPLICATION_CREDENTIALS` 필요.
   Firebase CLI 로그인만으로 Python 서버가 인증되지는 않는다.
 - 서비스 계정 JSON은 저장소 밖에 둔다.
-- `SUPPORT_HEAD_OFFICE_ID`에 실제 `contact.head_office_id` FK 값을 설정해야 문의 등록 가능.
+- 고객센터 문의는 레거시 `contact`를 보존하고 별도 테이블을 사용한다. 필요 시 `SUPPORT_HEAD_OFFICE_ID`에 실제 `head_office.id`를 설정하며, 미설정 시 유일한 고객지원본부(HQ004)를 사용한다.
+- 문의 테이블은 `python/fastapi/sql/support_inquiry.sql`을 설치한다. 문의 API가 마이페이지 앱과 본사 문의 목록에서 같은 행을 읽는다.
 - MySQL 자동 마이그레이션은 하지 않는다. [스키마 확인 안내](sql/README.md) 참고.
 - `API_SQLITE_PATH`는 기본 `python/fastapi/data/app.sqlite3`. 재시작/배포 시 이 파일을 보존해야 한다.
   여러 서버 인스턴스에서는 공유 DB로 교체해야 세션/설정/알림이 공유된다.
@@ -186,7 +197,7 @@ null은 허용하지 않는다. appVersion은 서버 설정 값이다.
 ```json
 {"content":"주문한 상품의 픽업 날짜를 확인하고 싶습니다."}
 ```
-이미지 contact.context VARCHAR(50) 기준으로 **1~50자**. 장문 문의는 DB와 입력 검증을 함께 확장해야 한다.
+문의 본문은 전용 MySQL 테이블 TEXT 필드에 저장하며 **1~2,000자**다. 기존 레거시 contact의 45자 본문 길이에 묶이지 않는다.
 문의 응답: id/content/createdAt/response/respondedAt/process. process 0은 접수,
 응답 내용/일자/처리 상태는 본사 시스템이 MySQL에 기록한 값을 그대로 조회한다.
 회원 API에는 답변 생성 권한을 제공하지 않는다.

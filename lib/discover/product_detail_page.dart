@@ -1,4 +1,5 @@
 import 'package:bootcamp_teamproject_1/discover/discover_api.dart';
+import 'package:bootcamp_teamproject_1/common/fitpick_snackbar.dart';
 import 'package:bootcamp_teamproject_1/order/cartController.dart';
 import 'package:bootcamp_teamproject_1/order/cartPage.dart';
 import 'package:bootcamp_teamproject_1/order/checkoutPage.dart';
@@ -619,9 +620,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
   void _showMessage(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    showFitpickSnackbar(message);
   }
 
   void _openCart() {
