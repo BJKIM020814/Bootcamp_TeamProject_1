@@ -1,6 +1,11 @@
 import 'package:bootcamp_teamproject_1/discover/discover_api.dart';
 import 'package:bootcamp_teamproject_1/discover/store_selection_page.dart';
+import 'package:bootcamp_teamproject_1/order/cartController.dart';
+import 'package:bootcamp_teamproject_1/order/cartPage.dart';
+import 'package:bootcamp_teamproject_1/user/authController.dart';
+import 'package:bootcamp_teamproject_1/user/loginpage.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 
 /// 상세에서 선택한 상품 코드·색상·사이즈를 수령 매장 화면까지 유지합니다.
 class SizeSelectionPage extends StatelessWidget {
@@ -39,16 +44,7 @@ class SizeSelectionPage extends StatelessWidget {
           ),
           const Spacer(),
           FilledButton(
-            // 매장 선택 화면은 값을 반환하지만 현재 이 페이지가 받아 저장하지는 않는다.
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => StoreSelectionPage(
-                  productCode: product.code,
-                  color: selectedColor,
-                  size: selectedSize,
-                ),
-              ),
-            ),
+            onPressed: () => _selectStoreAndAddToCart(context),
             child: const SizedBox(
               width: double.infinity,
               child: Center(child: Text('수령 매장 선택')),
@@ -58,4 +54,48 @@ class SizeSelectionPage extends StatelessWidget {
       ),
     ),
   );
+
+  /// 선택한 옵션 코드로 장바구니에 담고, 서버에 수령 매장을 함께 지정한다.
+  Future<void> _selectStoreAndAddToCart(BuildContext context) async {
+    if (!AuthController.to.isLoggedIn.value) {
+      await Get.to(() => const LoginPage());
+      return;
+    }
+    final store = await Navigator.of(context).push<PickupStore>(
+      MaterialPageRoute(
+        builder: (_) => StoreSelectionPage(
+          productCode: product.code,
+          color: selectedColor,
+          size: selectedSize,
+        ),
+      ),
+    );
+    if (store == null || !context.mounted) return;
+
+    final cart = CartController.to;
+    if (!await cart.addProduct(product.code)) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(cart.errorMessage.value ?? '상품을 장바구니에 담지 못했습니다.'),
+          ),
+        );
+      }
+      return;
+    }
+    if (!await cart.updateStore(store.id)) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              cart.errorMessage.value ??
+                  '상품은 담았지만 수령 매장을 지정하지 못했습니다. 장바구니에서 매장을 다시 선택해 주세요.',
+            ),
+          ),
+        );
+      }
+      return;
+    }
+    if (context.mounted) Get.to(() => const Cartpage());
+  }
 }

@@ -49,6 +49,21 @@ class LocalStore:
                 read_at TEXT);
             CREATE INDEX IF NOT EXISTS notifications_owner
                 ON notifications(email, notification_id);
+            CREATE TABLE IF NOT EXISTS cart_items (
+                cart_item_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                customer_id TEXT NOT NULL,
+                p_code TEXT NOT NULL,
+                quantity INTEGER NOT NULL DEFAULT 1 CHECK(quantity BETWEEN 1 AND 10),
+                selected INTEGER NOT NULL DEFAULT 1 CHECK(selected IN (0, 1)),
+                added_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(customer_id, p_code)
+            );
+            CREATE INDEX IF NOT EXISTS cart_items_owner
+                ON cart_items(customer_id, added_at, cart_item_id);
+            CREATE TABLE IF NOT EXISTS cart_pickups (
+                customer_id TEXT PRIMARY KEY,
+                dealer_seq INTEGER NOT NULL
+            );
             ''')
 
     def new_session(self, email):

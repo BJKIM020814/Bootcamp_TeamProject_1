@@ -16,37 +16,37 @@ class _SplashPageState extends State<SplashPage> {
   void initState() {
     super.initState();
     // 네트워크 요청을 기다리지 않고 고정 시간 뒤 화면을 넘긴다.
-    Timer(const Duration(milliseconds: 1600), _moveToHome);
+    Timer(const Duration(milliseconds: 1100), _moveToHome);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF6C4EFF),
+      backgroundColor: const Color(0xFFFFFDF9),
       body: SafeArea(
         child: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // 서비스 로고를 대신하는 신발 아이콘 목업입니다.
+              // 홈 화면과 동일한 중립 색상과 로고로 시작 상태를 표시한다.
               Container(
                 width: 96,
                 height: 96,
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(30),
+                  color: const Color(0xFF272A2D),
+                  borderRadius: BorderRadius.circular(26),
                 ),
                 child: const Icon(
                   Icons.directions_walk_rounded,
                   size: 52,
-                  color: Color(0xFF6C4EFF),
+                  color: Color(0xFFFFFDF9),
                 ),
               ),
               const SizedBox(height: 24),
               const Text(
                 'FitPick',
                 style: TextStyle(
-                  color: Colors.white,
+                  color: Color(0xFF272A2D),
                   fontSize: 34,
                   fontWeight: FontWeight.w800,
                 ),
@@ -54,7 +54,7 @@ class _SplashPageState extends State<SplashPage> {
               const SizedBox(height: 8),
               const Text(
                 '내 발에 꼭 맞는 한 켤레',
-                style: TextStyle(color: Color(0xFFDCD4FF), fontSize: 15),
+                style: TextStyle(color: Color(0xFF827A71), fontSize: 15),
               ),
             ],
           ),

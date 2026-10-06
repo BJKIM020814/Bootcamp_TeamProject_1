@@ -46,30 +46,45 @@ def get_product(product_code):
 
 
 def get_options(product):
-    """Use same SKU only when it is populated; do not infer options from names."""
-    if not product["p_sku"]:
-        return [], []
-    rows = db.query(
-        "SELECT DISTINCT p_color, p_size FROM product WHERE p_sku = %s", (product["p_sku"],)
-    )
+    """Return only persisted options in this model/target/color family.
+
+    SKU records encode size as their final numeric segment (for example
+    SKU-AR-001-270). Strip that segment only when it agrees with p_size; the
+    remaining prefix identifies sibling records, not fabricated combinations.
+    """
+    rows = get_variants(product)
     colors = sorted({row["p_color"] for row in rows if row["p_color"]})
     sizes = sorted({row["p_size"] for row in rows if row["p_size"] and row["p_size"] > 0})
     return colors, sizes
 
 
 def get_variants(product):
-    # 각 조합은 반드시 실제 p_code로 연결한다. 색상/사이즈 목록의 임의 곱을 만들지 않는다.
-    if not product['p_sku']:
+    # 실제 등록 행만 변형으로 연결하고, 대상·브랜드·모델명이 같은 제품군만 묶는다.
+    sku = product.get("p_sku") or ""
+    sku_parts = sku.rsplit("-", 1)
+    if len(sku_parts) != 2 or not sku_parts[1].isdigit() or int(sku_parts[1]) != product.get("p_size"):
         return [product]
+    family_prefix = sku_parts[0]
     return db.query(
-        f'SELECT {_PRODUCT_COLUMNS} FROM product WHERE p_sku=%s AND b_name=%s ORDER BY p_code',
-        (product['p_sku'], product['b_name']),
+        f"SELECT {_PRODUCT_COLUMNS} FROM product "
+        "WHERE p_sku LIKE %s AND b_name=%s AND p_name=%s AND p_gender=%s ORDER BY p_size, p_color, p_code",
+        (f"{family_prefix}-%", product["b_name"], product["p_name"], product["p_gender"]),
     )
 
 
 def get_image(product_code):
     row = db.query_one("SELECT p_image FROM product WHERE p_code = %s", (product_code,))
     return row["p_image"] if row else None
+
+
+def list_banners():
+    """Return only persisted banner identifiers; images are fetched from their BLOB rows."""
+    return db.query("SELECT seq FROM banner_image ORDER BY seq")
+
+
+def get_banner_image(seq):
+    row = db.query_one("SELECT image FROM banner_image WHERE seq = %s", (seq,))
+    return row["image"] if row else None
 
 
 def list_reviews(product_code, limit, offset):

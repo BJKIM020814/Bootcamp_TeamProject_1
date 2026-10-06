@@ -4,8 +4,15 @@ import 'package:flutter/material.dart';
 
 /// 목업의 상품 찾기 화면. 필터 값과 상품 카드는 API의 MySQL 응답만 표시한다.
 class ProductListPage extends StatefulWidget {
-  const ProductListPage({super.key, this.initialKeyword});
+  const ProductListPage({
+    super.key,
+    this.initialKeyword,
+    this.initialBrand,
+    this.initialGender,
+  });
   final String? initialKeyword;
+  final String? initialBrand;
+  final String? initialGender;
   @override
   State<ProductListPage> createState() => _ProductListPageState();
 }
@@ -20,6 +27,8 @@ class _ProductListPageState extends State<ProductListPage> {
   @override
   void initState() {
     super.initState();
+    _brand = widget.initialBrand;
+    _gender = widget.initialGender;
     _catalog = _load();
   }
 
@@ -33,7 +42,12 @@ class _ProductListPageState extends State<ProductListPage> {
     await _api.filters(),
     await _api.products(keyword: _search.text, brand: _brand, gender: _gender),
   );
-  void _reload() => setState(() => _catalog = _load());
+  void _reload() {
+    final nextCatalog = _load();
+    setState(() {
+      _catalog = nextCatalog;
+    });
+  }
 
   @override
   Widget build(BuildContext context) => Scaffold(

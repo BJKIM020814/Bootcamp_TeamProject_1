@@ -55,7 +55,7 @@ def _errors():
 
 
 def _customer(customer_id):
-    # 마이페이지와 같이 이메일 형식을 검사하고, 쇼핑 회원 행이 없으면 만든다.
+    # 회원은 기존 MySQL customer와 연결하지만 장바구니 스키마는 SQLite에서 관리한다.
     with _errors():
         md.ensure_customer(customer_id)
 
@@ -76,7 +76,8 @@ def _store(row):
 
 
 def _cart_item(row):
-    price, size, color = int(row["p_price"]), row["p_size"] or None, row["p_color"] or None
+    price = int(str(row["p_price"]).replace(",", ""))
+    size, color = row["p_size"] or None, row["p_color"] or None
     return CartItem(cart_item_id=row["cart_item_id"], product_code=row["p_code"], brand=row["b_name"],
                     name=row["p_name"], color=color, size=size, option_label=_option_label(color, size),
                     price=price, quantity=row["quantity"], selected=bool(row["selected"]),

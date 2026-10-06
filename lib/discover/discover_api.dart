@@ -98,6 +98,18 @@ class DiscoverFilters {
       );
 }
 
+class DiscoverBanner {
+  const DiscoverBanner({required this.seq, required this.imagePath});
+
+  final int seq;
+  final String imagePath;
+
+  factory DiscoverBanner.fromJson(Map<String, dynamic> json) => DiscoverBanner(
+    seq: json['seq'] as int,
+    imagePath: json['image_url'] as String,
+  );
+}
+
 class PickupStore {
   const PickupStore({
     required this.id,
@@ -191,6 +203,16 @@ class DiscoverApi {
   Future<DiscoverFilters> filters() async =>
       DiscoverFilters.fromJson(await _getObject('/api/v1/discover/filters'));
 
+  Future<List<DiscoverBanner>> banners() async {
+    final data = await _getObject('/api/v1/discover/banners');
+    return (data['items'] as List)
+        .map(
+          (item) =>
+              DiscoverBanner.fromJson(Map<String, dynamic>.from(item as Map)),
+        )
+        .toList();
+  }
+
   Future<List<DiscoverProduct>> products({
     String? keyword,
     String? brand,
@@ -233,4 +255,6 @@ class DiscoverApi {
 
   String? imageUrl(DiscoverProduct product) =>
       product.imagePath == null ? null : _uri(product.imagePath!).toString();
+
+  String bannerUrl(DiscoverBanner banner) => _uri(banner.imagePath).toString();
 }
