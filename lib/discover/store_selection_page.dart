@@ -22,10 +22,11 @@ class _StoreSelectionPageState extends State<StoreSelectionPage> {
   final _search = TextEditingController();
   late Future<List<PickupStore>> _stores;
   PickupStore? _selected;
+  Object? _loadError;
   @override
   void initState() {
     super.initState();
-    _stores = _api.pickupStores();
+    _stores = _loadStores();
   }
 
   @override
@@ -35,10 +36,20 @@ class _StoreSelectionPageState extends State<StoreSelectionPage> {
     super.dispose();
   }
 
+  Future<List<PickupStore>> _loadStores() async {
+    try {
+      return await _api.pickupStores(keyword: _search.text);
+    } catch (error) {
+      _loadError = error;
+      rethrow;
+    }
+  }
+
   void _reload() => setState(() {
     // 새 검색 결과에서 사라진 매장을 이전 선택값으로 확정하지 않는다.
     _selected = null;
-    _stores = _api.pickupStores(keyword: _search.text);
+    _loadError = null;
+    _stores = _loadStores();
   });
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -65,9 +76,22 @@ class _StoreSelectionPageState extends State<StoreSelectionPage> {
         }
         if (snap.hasError) {
           return Center(
-            child: OutlinedButton(
-              onPressed: _reload,
-              child: const Text('매장 목록 다시 시도'),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '${_loadError ?? snap.error}',
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton(
+                    onPressed: _reload,
+                    child: const Text('매장 목록 다시 시도'),
+                  ),
+                ],
+              ),
             ),
           );
         }
@@ -75,6 +99,24 @@ class _StoreSelectionPageState extends State<StoreSelectionPage> {
         return ListView(
           padding: const EdgeInsets.fromLTRB(20, 10, 20, 28),
           children: [
+            if (widget.productCode != null) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3F1EE),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '선택 상품: ${widget.productCode} · ${widget.color ?? '색상 미지정'} · ${widget.size == null ? '사이즈 미지정' : '${widget.size} mm'}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
             TextField(
               controller: _search,
               onSubmitted: (_) => _reload(),

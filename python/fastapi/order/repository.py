@@ -1,4 +1,4 @@
-"""MySQL queries for Order: cart, checkout, orders, pickup and exchange/return claims.
+"""Storage queries for Order: SQLite cart and MySQL catalogue/checkout data.
 
 주문 시 가격·할인은 클라이언트 값을 믿지 않고 product/coupon 테이블로 다시 계산한다.
 주문 생성·취소·수령·신청처럼 여러 행을 바꾸는 작업은 하나의 트랜잭션으로 묶는다.
@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 
 import pymysql
 from python import db
+from ..dependencies import get_local
 
 MAX_QUANTITY = 10
 PICKUP_HOLD_DAYS = 3          # 수령 준비 완료 후 매장 보관 기간
@@ -53,11 +54,24 @@ _CART_COLUMNS = (
 
 
 def list_cart(customer_id, selected_only=False):
-    sql = (f"SELECT {_CART_COLUMNS} FROM cart_item c JOIN product p ON p.p_code = c.p_code "
-        "WHERE c.customer_id = %s")
-    if selected_only:
-        sql += " AND c.selected = 1"
-    return db.query(sql + " ORDER BY c.added_at DESC, c.cart_item_id DESC", (customer_id,))
+    # 장바구니의 소유자·수량·선택 상태는 SQLite에 두고 상품의 최신 표시는 MySQL에서 읽는다.
+    predicate = "customer_id = ?" + (" AND selected = 1" if selected_only else "")
+    with get_local().connection() as conn:
+        cart_rows = [dict(row) for row in conn.execute(
+            f"SELECT cart_item_id, p_code, quantity, selected FROM cart_items "
+            f"WHERE {predicate} ORDER BY added_at DESC, cart_item_id DESC", (customer_id,)
+        ).fetchall()]
+    if not cart_rows:
+        return []
+    codes = [row["p_code"] for row in cart_rows]
+    marks = ", ".join(["%s"] * len(codes))
+    products = db.query(
+        "SELECT p_code, p_name, b_name, p_price, p_color, p_size, "
+        "OCTET_LENGTH(p_image) AS image_bytes FROM product "
+        f"WHERE p_code IN ({marks})", codes,
+    )
+    by_code = {row["p_code"]: row for row in products}
+    return [{**by_code[row["p_code"]], **row} for row in cart_rows if row["p_code"] in by_code]
 
 
 def product_exists(product_code):
@@ -66,41 +80,53 @@ def product_exists(product_code):
 
 def add_cart_item(customer_id, product_code, quantity):
     """같은 상품을 다시 담으면 수량을 더하고 선택 상태로 만든다."""
-    db.execute(
-        "INSERT INTO cart_item (customer_id, p_code, quantity, selected) VALUES (%s, %s, %s, 1) "
-        "ON DUPLICATE KEY UPDATE quantity = LEAST(quantity + VALUES(quantity), %s), selected = 1",
-        (customer_id, product_code, quantity, MAX_QUANTITY),
-    )
+    with get_local().connection() as conn:
+        conn.execute(
+            "INSERT INTO cart_items (customer_id, p_code, quantity, selected) VALUES (?, ?, ?, 1) "
+            "ON CONFLICT(customer_id, p_code) DO UPDATE SET "
+            "quantity = MIN(cart_items.quantity + excluded.quantity, ?), selected = 1",
+            (customer_id, product_code, quantity, MAX_QUANTITY),
+        )
 
 
 def update_cart_item(customer_id, cart_item_id, quantity=None, selected=None):
-    sets, params = [], []
-    if quantity is not None:
-        sets.append("quantity = %s")
-        params.append(quantity)
-    if selected is not None:
-        sets.append("selected = %s")
-        params.append(1 if selected else 0)
-    if not db.query_one("SELECT 1 AS found FROM cart_item WHERE customer_id = %s AND cart_item_id = %s",
-                        (customer_id, cart_item_id)):
-        raise OrderError(404, "CART_ITEM_NOT_FOUND", "장바구니 상품을 찾을 수 없습니다.")
-    if sets:
-        db.execute(f"UPDATE cart_item SET {', '.join(sets)} WHERE customer_id = %s AND cart_item_id = %s",
-                (*params, customer_id, cart_item_id))
+    has_updates = quantity is not None or selected is not None
+    with get_local().connection() as conn:
+        cursor = conn.execute("SELECT 1 FROM cart_items WHERE customer_id = ? AND cart_item_id = ?",
+                              (customer_id, cart_item_id))
+        if cursor.fetchone() is None:
+            raise OrderError(404, "CART_ITEM_NOT_FOUND", "장바구니 상품을 찾을 수 없습니다.")
+        if has_updates:
+            assignments, sqlite_params = [], []
+            if quantity is not None:
+                assignments.append("quantity = ?")
+                sqlite_params.append(quantity)
+            if selected is not None:
+                assignments.append("selected = ?")
+                sqlite_params.append(int(selected))
+            conn.execute(f"UPDATE cart_items SET {', '.join(assignments)} "
+                         "WHERE customer_id = ? AND cart_item_id = ?",
+                         (*sqlite_params, customer_id, cart_item_id))
 
 
 def delete_cart_item(customer_id, cart_item_id):
-    if not db.execute("DELETE FROM cart_item WHERE customer_id = %s AND cart_item_id = %s",
-                    (customer_id, cart_item_id)):
+    with get_local().connection() as conn:
+        deleted = conn.execute("DELETE FROM cart_items WHERE customer_id = ? AND cart_item_id = ?",
+                               (customer_id, cart_item_id)).rowcount
+    if not deleted:
         raise OrderError(404, "CART_ITEM_NOT_FOUND", "장바구니 상품을 찾을 수 없습니다.")
 
 
 def delete_selected_cart_items(customer_id):
-    return db.execute("DELETE FROM cart_item WHERE customer_id = %s AND selected = 1", (customer_id,))
+    with get_local().connection() as conn:
+        return conn.execute("DELETE FROM cart_items WHERE customer_id = ? AND selected = 1",
+                            (customer_id,)).rowcount
 
 
 def select_all_cart_items(customer_id, selected):
-    db.execute("UPDATE cart_item SET selected = %s WHERE customer_id = %s", (1 if selected else 0, customer_id))
+    with get_local().connection() as conn:
+        conn.execute("UPDATE cart_items SET selected = ? WHERE customer_id = ?",
+                     (int(selected), customer_id))
 
 
 # ---------- 수령 매장 ----------
@@ -113,19 +139,24 @@ def get_dealer(seq):
 
 def get_cart_pickup(customer_id):
     """장바구니에서 고른 매장 → 마이페이지 단골 매장 순으로 찾는다."""
-    return db.query_one(
-        f"SELECT {_DEALER_COLUMNS} FROM authorized_dealer WHERE seq = COALESCE("
-        "(SELECT dealer_seq FROM cart_pickup WHERE customer_id = %s), "
-        "(SELECT favorite_dealer_seq FROM customer_setting WHERE customer_id = %s))",
-        (customer_id, customer_id),
-    )
+    with get_local().connection() as conn:
+        selected = conn.execute("SELECT dealer_seq FROM cart_pickups WHERE customer_id = ?",
+                                (customer_id,)).fetchone()
+    dealer_seq = selected["dealer_seq"] if selected else None
+    if dealer_seq is None:
+        row = db.query_one("SELECT favorite_dealer_seq FROM customer_setting WHERE customer_id = %s",
+                           (customer_id,))
+        dealer_seq = row["favorite_dealer_seq"] if row else None
+    return get_dealer(dealer_seq) if dealer_seq is not None else None
 
 
 def set_cart_pickup(customer_id, dealer_seq):
     if get_dealer(dealer_seq) is None:
         raise OrderError(404, "STORE_NOT_FOUND", "수령 매장을 찾을 수 없습니다.")
-    db.execute("INSERT INTO cart_pickup (customer_id, dealer_seq) VALUES (%s, %s) "
-            "ON DUPLICATE KEY UPDATE dealer_seq = VALUES(dealer_seq)", (customer_id, dealer_seq))
+    with get_local().connection() as conn:
+        conn.execute("INSERT INTO cart_pickups (customer_id, dealer_seq) VALUES (?, ?) "
+                     "ON CONFLICT(customer_id) DO UPDATE SET dealer_seq = excluded.dealer_seq",
+                     (customer_id, dealer_seq))
 
 
 # ---------- 쿠폰 ----------

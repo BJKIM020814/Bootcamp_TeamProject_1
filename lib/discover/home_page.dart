@@ -1,3 +1,5 @@
+import 'package:bootcamp_teamproject_1/discover/discover_api.dart';
+import 'package:bootcamp_teamproject_1/discover/product_detail_page.dart';
 import 'package:bootcamp_teamproject_1/discover/product_list_page.dart';
 import 'package:bootcamp_teamproject_1/discover/store_selection_page.dart';
 import 'package:bootcamp_teamproject_1/order/cartPage.dart';
@@ -7,8 +9,7 @@ import 'package:bootcamp_teamproject_1/user/loginpage.dart';
 import 'package:bootcamp_teamproject_1/user/mypage/my_page.dart';
 import 'package:flutter/material.dart';
 
-/// Discover 첫 화면. 현재 홈의 추천 카드/배너는 정적 목업이며,
-/// 상품 검색·목록 및 매장 선택 화면은 서버 조회 데이터를 사용한다.
+/// 홈의 상품·대상·브랜드·배너는 FastAPI가 반환한 DB 레코드만 표시한다.
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -17,556 +18,535 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  String _audience = '전체';
-  String _brand = '전체';
-  String _purpose = '전체';
+  final DiscoverApi _api = DiscoverApi();
+  String? _gender;
+  String? _brand;
+  late Future<_HomeData> _home;
 
   @override
-  Widget build(BuildContext context) {
-    // 현재 DB에 홈 큐레이션 관계가 없어 디자인 확인용 카드만 정적으로 노출한다.
-    const products = [
-      (
-        'NEW BALANCE',
-        '530',
-        '₩129,000',
-        '데일리',
-        'https://fitpick-o2o.higgsfield.app/assets/products/nb530.jpg',
-      ),
-      (
-        'NIKE',
-        "에어 포스 1 '07",
-        '₩119,000',
-        '데일리',
-        'https://fitpick-o2o.higgsfield.app/assets/products/airforce.png',
-      ),
-      (
-        'ADIDAS',
-        '삼바 OG',
-        '₩139,000',
-        '클래식',
-        'https://fitpick-o2o.higgsfield.app/assets/products/samba.jpg',
-      ),
-      (
-        'NIKE',
-        '페가수스 41',
-        '₩159,000',
-        '러닝화',
-        'https://fitpick-o2o.higgsfield.app/assets/products/pegasus41.jpg',
-      ),
-      (
-        'PUMA',
-        '스웨이드 클래식',
-        '₩99,000',
-        '클래식',
-        'https://fitpick-o2o.higgsfield.app/assets/products/puma-suede.jpg',
-      ),
-      (
-        'ASICS',
-        '노바블라스트 6',
-        '₩179,000',
-        '러닝화',
-        'https://fitpick-o2o.higgsfield.app/assets/products/novablast6.webp',
-      ),
-    ];
-    final visibleProducts = _purpose == '전체'
-        ? products
-        : products.where((product) => product.$4 == _purpose).toList();
+  void initState() {
+    super.initState();
+    _home = _load();
+  }
 
-    return Scaffold(
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
+  @override
+  void dispose() {
+    _api.dispose();
+    super.dispose();
+  }
+
+  Future<_HomeData> _load() async {
+    final values = await Future.wait<Object>([
+      _api.filters(),
+      _api.banners(),
+      _api.products(gender: _gender, brand: _brand),
+    ]);
+    return _HomeData(
+      filters: values[0] as DiscoverFilters,
+      banners: values[1] as List<DiscoverBanner>,
+      products: values[2] as List<DiscoverProduct>,
+    );
+  }
+
+  void _reload() {
+    final nextHome = _load();
+    setState(() {
+      _home = nextHome;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    body: SafeArea(
+      child: FutureBuilder<_HomeData>(
+        future: _home,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return _HomeError(error: snapshot.error, onRetry: _reload);
+          }
+          return _body(snapshot.data!);
+        },
+      ),
+    ),
+    bottomNavigationBar: _buildNavigation(),
+  );
+
+  Widget _body(_HomeData data) => RefreshIndicator(
+    onRefresh: () async => _reload(),
+    child: ListView(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+      children: [
+        Row(
           children: [
-            // 브랜드 제목과 알림 진입 영역입니다.
-            Row(
-              children: [
-                const Text(
-                  'FITPICK.',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -1.3,
-                  ),
-                ),
-                const Spacer(),
-                IconButton(
-                  onPressed: () {},
-                  icon: const Icon(Icons.notifications_none_rounded),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
             const Text(
-              '안녕하세요!',
-              style: TextStyle(color: Color(0xFF827A71), fontSize: 14),
-            ),
-            const SizedBox(height: 4),
-            const Text(
-              '오늘도 좋은 하루 되세요 👋',
+              'FITPICK.',
               style: TextStyle(
                 fontSize: 24,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -1,
+                fontWeight: FontWeight.w900,
+                letterSpacing: -1.3,
               ),
             ),
-            const SizedBox(height: 18),
-            // 상품 목록 화면으로 이동하는 검색 입력 목업입니다.
-            InkWell(
-              onTap: _openProductList,
+            const Spacer(),
+            IconButton(
+              onPressed: () {},
+              icon: const Icon(Icons.notifications_none_rounded),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          '오늘 신을 한 켤레를 찾아보세요',
+          style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 16),
+        InkWell(
+          onTap: _openProductList,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            height: 52,
+            padding: const EdgeInsets.symmetric(horizontal: 15),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF3F1EE),
               borderRadius: BorderRadius.circular(14),
-              child: Container(
-                height: 52,
-                padding: const EdgeInsets.symmetric(horizontal: 15),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF3F1EE),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.search_rounded, color: Color(0xFF5D5751)),
-                    SizedBox(width: 10),
-                    Text('신발 검색', style: TextStyle(color: Color(0xFF948C84))),
-                    Spacer(),
-                    Icon(Icons.tune_rounded, size: 20),
-                  ],
-                ),
-              ),
             ),
-            const SizedBox(height: 22),
-            // 참고 목업의 큰 프로모션 카드 비율과 색상을 반영한 배너입니다.
-            InkWell(
-              onTap: _openProductDetail,
-              borderRadius: BorderRadius.circular(25),
-              child: Container(
-                height: 210,
-                clipBehavior: Clip.antiAlias,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE8E0D6),
-                  borderRadius: BorderRadius.circular(25),
-                ),
-                child: Stack(
-                  children: [
-                    Positioned(
-                      right: -5,
-                      bottom: -5,
-                      child: Image.network(
-                        'https://fitpick-o2o.higgsfield.app/assets/products/nb530.jpg',
-                        width: 220,
-                        height: 180,
-                        fit: BoxFit.contain,
-                        errorBuilder: (_, _, _) =>
-                            const Icon(Icons.image_outlined, size: 80),
-                      ),
-                    ),
-                    Positioned(
-                      left: 20,
-                      top: 24,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'NEW SEASON / NEW STEP',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 1,
-                            ),
-                          ),
-                          SizedBox(height: 12),
-                          Text(
-                            '새로운 계절.\n새로운 시작.',
-                            style: TextStyle(
-                              fontSize: 23,
-                              height: 1.2,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                          SizedBox(height: 10),
-                          Text(
-                            '지금, 당신의 스타일을\n찾아보세요.',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Color(0xFF5F574F),
-                            ),
-                          ),
-                          SizedBox(height: 12),
-                          Text(
-                            '530 만나보기  →',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w800,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Positioned(
-                      left: 20,
-                      bottom: 12,
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 24,
-                            height: 4,
-                            color: Color(0xFF302B27),
-                          ),
-                          SizedBox(width: 5),
-                          CircleAvatar(
-                            radius: 2.5,
-                            backgroundColor: Color(0xFFAFA79F),
-                          ),
-                          SizedBox(width: 5),
-                          CircleAvatar(
-                            radius: 2.5,
-                            backgroundColor: Color(0xFFAFA79F),
-                          ),
-                          SizedBox(width: 5),
-                          CircleAvatar(
-                            radius: 2.5,
-                            backgroundColor: Color(0xFFAFA79F),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 26),
-            // 용도별 필터를 선택하면 이 화면 하단의 상품 그리드가 즉시 바뀝니다.
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: const Row(
               children: [
-                for (final item in const [
-                  ('러닝화', Icons.directions_run_rounded),
-                  ('데일리', Icons.ice_skating_rounded),
-                  ('클래식', Icons.checkroom_rounded),
-                  ('아웃도어', Icons.terrain_rounded),
-                ])
-                  InkWell(
-                    onTap: () => setState(() => _purpose = item.$1),
-                    borderRadius: BorderRadius.circular(16),
-                    child: Column(
-                      children: [
-                        Container(
-                          width: 68,
-                          height: 58,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF4F3F2),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Icon(item.$2, color: const Color(0xFF39342F)),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          item.$1,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                Icon(Icons.search_rounded),
+                SizedBox(width: 10),
+                Text('신발 검색', style: TextStyle(color: Color(0xFF948C84))),
+                Spacer(),
+                Icon(Icons.tune_rounded, size: 20),
               ],
             ),
-            const SizedBox(height: 30),
+          ),
+        ),
+        const SizedBox(height: 20),
+        if (data.banners.isNotEmpty)
+          _BannerCarousel(api: _api, banners: data.banners),
+        if (data.banners.isEmpty) const _EmptyBanner(),
+        const SizedBox(height: 26),
+        const Text(
+          '용도로 둘러보기',
+          style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: 10),
+        if (data.filters.purposes.isEmpty)
+          const _MissingPurposeNotice()
+        else
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final purpose in data.filters.purposes)
+                ActionChip(label: Text(purpose), onPressed: _openProductList),
+            ],
+          ),
+        const SizedBox(height: 24),
+        const Text(
+          '대상별 신발',
+          style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: 10),
+        _filterChips(
+          values: data.filters.genders,
+          selected: _gender,
+          allLabel: '전체 대상',
+          onSelected: (value) {
+            _gender = value;
+            _reload();
+          },
+        ),
+        const SizedBox(height: 24),
+        const Text(
+          '브랜드로 둘러보기',
+          style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: 10),
+        _filterChips(
+          values: data.filters.brands,
+          selected: _brand,
+          allLabel: '전체 브랜드',
+          onSelected: (value) {
+            _brand = value;
+            _reload();
+          },
+        ),
+        const SizedBox(height: 24),
+        Row(
+          children: [
             const Text(
-              '대상별 신발',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+              '등록 상품',
+              style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900),
             ),
-            const SizedBox(height: 13),
-            // 대상 필터는 데이터 연결 전 선택 상태만 화면에 반영합니다.
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  for (final item in const ['전체', '남성·공용', '여성용', '아동용'])
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ChoiceChip(
-                        label: Text(item),
-                        selected: _audience == item,
-                        onSelected: (_) => setState(() => _audience = item),
-                        selectedColor: const Color(0xFF272A2D),
-                        labelStyle: TextStyle(
-                          color: _audience == item
-                              ? Colors.white
-                              : const Color(0xFF49433D),
-                          fontWeight: FontWeight.w700,
-                        ),
-                        side: BorderSide.none,
-                        backgroundColor: const Color(0xFFF3F1EE),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 28),
-            const Text(
-              '브랜드로 둘러보기',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
-            ),
-            const SizedBox(height: 13),
-            // 브랜드 필터 역시 서버 상품 데이터와 연결하기 전의 인터랙션 목업입니다.
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  for (final item in const [
-                    '전체',
-                    'NIKE',
-                    'ADIDAS',
-                    'NB',
-                    'ASICS',
-                    'VANS',
-                    'SALOMON',
-                  ])
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ChoiceChip(
-                        label: Text(item),
-                        selected: _brand == item,
-                        onSelected: (_) => setState(() => _brand = item),
-                        selectedColor: const Color(0xFF272A2D),
-                        labelStyle: TextStyle(
-                          color: _brand == item
-                              ? Colors.white
-                              : const Color(0xFF49433D),
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12,
-                        ),
-                        side: const BorderSide(color: Color(0xFFE4E0DB)),
-                        backgroundColor: Colors.white,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 30),
-            // 홈 하단에서 전체 상품을 계속 확인할 수 있는 상품 그리드입니다.
-            Row(
-              children: [
-                const Text(
-                  '추천 상품',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
-                ),
-                const Spacer(),
-                TextButton(
-                  onPressed: _openProductList,
-                  child: const Text(
-                    '전체 보기  ›',
-                    style: TextStyle(
-                      color: Color(0xFF4D4740),
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            // 아래 6개 목업 카드와 무관한 고정 문구이며 실제 DB 집계가 아니다.
-            const Text(
-              '27개의 실제 모델',
-              style: TextStyle(color: Color(0xFF918981), fontSize: 12),
-            ),
-            const SizedBox(height: 15),
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: visibleProducts.length,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 22,
-                childAspectRatio: .58,
-              ),
-              itemBuilder: (context, index) => _ProductCard(
-                brand: visibleProducts[index].$1,
-                name: visibleProducts[index].$2,
-                price: visibleProducts[index].$3,
-                imageUrl: visibleProducts[index].$5,
-                onTap: _openProductDetail,
-              ),
-            ),
-            const SizedBox(height: 20),
-            InkWell(
-              onTap: _openStoreSelection,
-              borderRadius: BorderRadius.circular(18),
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF0ECE5),
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.storefront_rounded),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        '가까운 매장에서 직접 신어보세요',
-                        style: TextStyle(fontWeight: FontWeight.w800),
-                      ),
-                    ),
-                    Icon(Icons.chevron_right_rounded),
-                  ],
+            const Spacer(),
+            TextButton(
+              onPressed: _openProductList,
+              child: const Text(
+                '전체 보기  ›',
+                style: TextStyle(
+                  color: Color(0xFF4D4740),
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),
           ],
         ),
+        Text(
+          '${data.products.length}개 표시 · 대상/브랜드 필터 적용',
+          style: const TextStyle(color: Color(0xFF918981), fontSize: 12),
+        ),
+        const SizedBox(height: 12),
+        if (data.products.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 48),
+            child: Center(child: Text('선택한 조건에 맞는 상품이 없습니다.')),
+          )
+        else
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: data.products.length,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 18,
+              childAspectRatio: .60,
+            ),
+            itemBuilder: (context, index) => _ProductCard(
+              product: data.products[index],
+              api: _api,
+              onTap: () => _openProduct(data.products[index]),
+            ),
+          ),
+        const SizedBox(height: 20),
+        InkWell(
+          onTap: _openStoreSelection,
+          borderRadius: BorderRadius.circular(18),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0ECE5),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.storefront_rounded),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    '수령 매장 찾기',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+                Icon(Icons.chevron_right_rounded),
+              ],
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _filterChips({
+    required List<String> values,
+    required String? selected,
+    required String allLabel,
+    required ValueChanged<String?> onSelected,
+  }) => SingleChildScrollView(
+    scrollDirection: Axis.horizontal,
+    child: Row(
+      children: [
+        for (final value in <String?>[null, ...values])
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ChoiceChip(
+              label: Text(value ?? allLabel),
+              selected: value == selected,
+              onSelected: (_) => onSelected(value),
+              selectedColor: const Color(0xFF272A2D),
+              labelStyle: TextStyle(
+                color: value == selected
+                    ? Colors.white
+                    : const Color(0xFF49433D),
+                fontWeight: FontWeight.w700,
+              ),
+              side: BorderSide.none,
+              backgroundColor: const Color(0xFFF3F1EE),
+            ),
+          ),
+      ],
+    ),
+  );
+
+  Widget _buildNavigation() => NavigationBar(
+    selectedIndex: 0,
+    onDestinationSelected: (index) {
+      switch (index) {
+        case 1:
+          _openProductList();
+        case 2:
+          _openIfLoggedIn(() => const Cartpage());
+        case 3:
+          _openIfLoggedIn(() => const Orderhistorypage());
+        case 4:
+          _openIfLoggedIn(() => const MyPage());
+      }
+    },
+    height: 66,
+    labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+    destinations: const [
+      NavigationDestination(
+        icon: Icon(Icons.home_outlined),
+        selectedIcon: Icon(Icons.home_rounded),
+        label: '홈',
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: 0,
-        onDestinationSelected: (index) {
-          switch (index) {
-            case 1:
-              _openProductList();
-            case 2:
-              _openCart();
-            case 3:
-              _openOrderHistory();
-            case 4:
-              _openMyPage();
-          }
-        },
-        height: 66,
-        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home_rounded),
-            label: '홈',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.grid_view_rounded),
-            label: '카테고리',
-          ),
-          NavigationDestination(icon: CartBadgeIcon(), label: '장바구니'),
-          NavigationDestination(
-            icon: Icon(Icons.receipt_long_outlined),
-            label: '주문내역',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.person_outline_rounded),
-            label: '마이',
-          ),
-        ],
+      NavigationDestination(icon: Icon(Icons.grid_view_rounded), label: '카테고리'),
+      NavigationDestination(
+        icon: Icon(Icons.shopping_bag_outlined),
+        label: '장바구니',
       ),
-    );
-  }
+      NavigationDestination(
+        icon: Icon(Icons.receipt_long_outlined),
+        label: '주문내역',
+      ),
+      NavigationDestination(
+        icon: Icon(Icons.person_outline_rounded),
+        label: '마이',
+      ),
+    ],
+  );
 
-  // 검색·카테고리·전체 보기에서 상품 목록으로 이동합니다.
-  void _openProductList() => Navigator.of(
-    context,
-  ).push(MaterialPageRoute(builder: (_) => const ProductListPage()));
+  void _openProductList() => Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) =>
+          ProductListPage(initialBrand: _brand, initialGender: _gender),
+    ),
+  );
 
-  // 배너는 현재 DB 등록 상품을 확인할 수 있는 목록으로 이동합니다.
-  void _openProductDetail() => _openProductList();
+  void _openProduct(DiscoverProduct product) => Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => ProductDetailPage(productCode: product.code),
+    ),
+  );
 
-  // 오프라인 매장 확인 카드를 누르면 매장 선택으로 이동합니다.
   void _openStoreSelection() => Navigator.of(
     context,
   ).push(MaterialPageRoute(builder: (_) => const StoreSelectionPage()));
 
-  // 로그인하지 않은 상태라면 로그인 화면으로, 로그인된 상태라면 요청한 화면으로 이동합니다.
   void _openIfLoggedIn(Widget Function() builder) {
     final target = AuthController.to.isLoggedIn.value
         ? builder()
         : const LoginPage();
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => target));
   }
+}
 
-  // 하단 탭바의 장바구니 탭으로 이동합니다.
-  void _openCart() => _openIfLoggedIn(() => const Cartpage());
+class _HomeData {
+  const _HomeData({
+    required this.filters,
+    required this.banners,
+    required this.products,
+  });
 
-  // 하단 탭바의 주문내역 탭으로 이동합니다.
-  void _openOrderHistory() => _openIfLoggedIn(() => const Orderhistorypage());
+  final DiscoverFilters filters;
+  final List<DiscoverBanner> banners;
+  final List<DiscoverProduct> products;
+}
 
-  // 하단 탭바의 마이 탭으로 이동합니다.
-  void _openMyPage() => _openIfLoggedIn(() => const MyPage());
+class _BannerCarousel extends StatefulWidget {
+  const _BannerCarousel({required this.api, required this.banners});
+
+  final DiscoverApi api;
+  final List<DiscoverBanner> banners;
+
+  @override
+  State<_BannerCarousel> createState() => _BannerCarouselState();
+}
+
+class _BannerCarouselState extends State<_BannerCarousel> {
+  final PageController _controller = PageController(viewportFraction: .94);
+  int _index = 0;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Column(
+    children: [
+      SizedBox(
+        height: 205,
+        child: PageView.builder(
+          controller: _controller,
+          itemCount: widget.banners.length,
+          onPageChanged: (index) => setState(() => _index = index),
+          itemBuilder: (context, index) => Padding(
+            padding: const EdgeInsets.only(right: 10),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: Container(
+                color: const Color(0xFFE8E0D6),
+                child: Image.network(
+                  widget.api.bannerUrl(widget.banners[index]),
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => const Center(
+                    child: Icon(Icons.broken_image_outlined, size: 52),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+      const SizedBox(height: 9),
+      Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          for (var i = 0; i < widget.banners.length; i++)
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              margin: const EdgeInsets.symmetric(horizontal: 3),
+              width: i == _index ? 20 : 6,
+              height: 6,
+              decoration: BoxDecoration(
+                color: i == _index
+                    ? const Color(0xFF302B27)
+                    : const Color(0xFFAFA79F),
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+        ],
+      ),
+    ],
+  );
+}
+
+class _EmptyBanner extends StatelessWidget {
+  const _EmptyBanner();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    height: 180,
+    decoration: BoxDecoration(
+      color: const Color(0xFFF3F1EE),
+      borderRadius: BorderRadius.circular(24),
+    ),
+    child: const Center(child: Text('등록된 배너가 없습니다.')),
+  );
+}
+
+class _MissingPurposeNotice extends StatelessWidget {
+  const _MissingPurposeNotice();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(13),
+    decoration: BoxDecoration(
+      color: const Color(0xFFF5F2ED),
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: const Text(
+      '현재 상품 DB에 용도 분류가 없어 용도별 상품을 구분할 수 없습니다. 분류 데이터가 등록되면 이곳에 표시됩니다.',
+      style: TextStyle(fontSize: 12, color: Color(0xFF6E675F), height: 1.5),
+    ),
+  );
 }
 
 class _ProductCard extends StatelessWidget {
   const _ProductCard({
-    required this.brand,
-    required this.name,
-    required this.price,
-    required this.imageUrl,
+    required this.product,
+    required this.api,
     required this.onTap,
   });
 
-  final String brand;
-  final String name;
-  final String price;
-  final String imageUrl;
+  final DiscoverProduct product;
+  final DiscoverApi api;
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Container(
-              clipBehavior: Clip.antiAlias,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF4F3F1),
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: Image.network(
-                      imageUrl,
-                      fit: BoxFit.contain,
-                      errorBuilder: (_, _, _) =>
-                          const Center(child: Icon(Icons.image_outlined)),
-                    ),
-                  ),
-                  const Positioned(
-                    top: 10,
-                    right: 10,
-                    child: Icon(
-                      Icons.favorite_border_rounded,
-                      color: Color(0xFF706962),
-                    ),
-                  ),
-                ],
-              ),
+  Widget build(BuildContext context) => InkWell(
+    onTap: onTap,
+    borderRadius: BorderRadius.circular(18),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Container(
+            width: double.infinity,
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF4F3F1),
+              borderRadius: BorderRadius.circular(18),
             ),
+            child: _image(),
           ),
-          const SizedBox(height: 10),
-          Text(
-            brand,
-            style: const TextStyle(
-              fontSize: 10,
-              color: Color(0xFF766E66),
-              fontWeight: FontWeight.w800,
-            ),
+        ),
+        const SizedBox(height: 9),
+        Text(
+          product.brand,
+          style: const TextStyle(
+            fontSize: 10,
+            color: Color(0xFF766E66),
+            fontWeight: FontWeight.w800,
           ),
-          const SizedBox(height: 2),
-          Text(
-            name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            price,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 5),
-          const Text(
-            '공용 · 데일리 · 예시 가격',
-            style: TextStyle(fontSize: 10, color: Color(0xFF918981)),
-          ),
-        ],
-      ),
+        ),
+        Text(
+          product.name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w900),
+        ),
+        Text(
+          '₩${product.price}',
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+        ),
+        Text(
+          product.gender,
+          style: const TextStyle(fontSize: 10, color: Color(0xFF918981)),
+        ),
+      ],
+    ),
+  );
+
+  Widget _image() {
+    final url = api.imageUrl(product);
+    if (url == null) {
+      return const Center(child: Icon(Icons.image_outlined, size: 42));
+    }
+    return Image.network(
+      url,
+      fit: BoxFit.contain,
+      errorBuilder: (_, _, _) =>
+          const Center(child: Icon(Icons.broken_image_outlined)),
     );
   }
+}
+
+class _HomeError extends StatelessWidget {
+  const _HomeError({required this.error, required this.onRetry});
+
+  final Object? error;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) => Center(
+    child: Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.cloud_off_outlined, size: 42),
+          const SizedBox(height: 12),
+          Text('$error', textAlign: TextAlign.center),
+          const SizedBox(height: 12),
+          OutlinedButton(onPressed: onRetry, child: const Text('다시 시도')),
+        ],
+      ),
+    ),
+  );
 }

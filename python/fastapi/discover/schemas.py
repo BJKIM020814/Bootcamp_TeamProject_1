@@ -69,6 +69,18 @@ class DiscoverFilters(BaseModel):
     )
 
 
+class BannerSummary(BaseModel):
+    """Banner image stored in banner_image. The current schema has no target/product relation."""
+
+    seq: int
+    image_url: str
+
+
+class BannerListResponse(BaseModel):
+    items: list[BannerSummary]
+    total: int = Field(ge=0)
+
+
 class PickupStore(BaseModel):
     """Pickup point only. It must not be interpreted as dealer sales inventory."""
 

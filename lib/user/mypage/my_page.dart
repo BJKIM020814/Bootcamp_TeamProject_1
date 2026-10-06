@@ -230,100 +230,107 @@ class _MyPageState extends State<MyPage> {
   }
 
   Widget _buildSizeCard() {
-    return Container(
-      height: 276,
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: _navy,
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Stack(
-        children: [
-          Positioned(
-            right: -30,
-            top: 20,
-            child: Transform.rotate(
-              angle: 0.18,
-              child: Container(
-                width: 200,
-                height: 220,
-                color: const Color(0xFFC9CFD2),
-                child: const Icon(
-                  Icons.snowshoeing,
-                  size: 110,
-                  color: Color(0xFF5C6B75),
+    return InkWell(
+      onTap: _openProfile,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        height: 276,
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: _navy,
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Stack(
+          children: [
+            Positioned(
+              right: -30,
+              top: 20,
+              child: Transform.rotate(
+                angle: 0.18,
+                child: Container(
+                  width: 200,
+                  height: 220,
+                  color: const Color(0xFFC9CFD2),
+                  child: const Icon(
+                    Icons.snowshoeing,
+                    size: 110,
+                    color: Color(0xFF5C6B75),
+                  ),
                 ),
               ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(28),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Text(
-                  'MY SHOE SIZE',
-                  style: TextStyle(
-                    fontSize: 11,
-                    letterSpacing: 2,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF9FB0B8),
+            Padding(
+              padding: const EdgeInsets.all(28),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text(
+                    'MY SHOE SIZE',
+                    style: TextStyle(
+                      fontSize: 11,
+                      letterSpacing: 2,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF9FB0B8),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 14),
-                const Text(
-                  '내 신발 사이즈',
-                  style: TextStyle(fontSize: 20, color: Colors.white),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
-                  children: [
-                    Obx(
-                      () => Text(
-                        _c.shoeSize.value.replaceAll('mm', ''),
-                        style: const TextStyle(
-                          fontSize: 52,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                    SizedBox(width: 4),
-                    const Text(
-                      'mm',
-                      style: TextStyle(fontSize: 18, color: Color(0xFF9FB0B8)),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                InkWell(
-                  onTap: _openProfile,
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
+                  const SizedBox(height: 14),
+                  const Text(
+                    '내 신발 사이즈',
+                    style: TextStyle(fontSize: 20, color: Colors.white),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
                     children: [
-                      Text(
-                        '사이즈 변경',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFFD0D8DC),
+                      Obx(
+                        () => Text(
+                          _c.shoeSize.value.replaceAll('mm', ''),
+                          style: const TextStyle(
+                            fontSize: 52,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
-                      SizedBox(width: 8),
-                      Icon(
-                        Icons.north_east,
-                        size: 14,
-                        color: Color(0xFFD0D8DC),
+                      SizedBox(width: 4),
+                      const Text(
+                        'mm',
+                        style: TextStyle(
+                          fontSize: 18,
+                          color: Color(0xFF9FB0B8),
+                        ),
                       ),
                     ],
                   ),
-                ),
-              ],
+                  const SizedBox(height: 14),
+                  InkWell(
+                    onTap: _openProfile,
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '사이즈 변경',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFFD0D8DC),
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Icon(
+                          Icons.north_east,
+                          size: 14,
+                          color: Color(0xFFD0D8DC),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

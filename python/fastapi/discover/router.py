@@ -6,7 +6,7 @@ from fastapi.responses import Response
 
 from . import repository
 from .schemas import (
-    DiscoverFilters, PickupStore, PickupStoreListResponse, ProductDetail,
+    BannerListResponse, BannerSummary, DiscoverFilters, PickupStore, PickupStoreListResponse, ProductDetail,
     ProductListResponse, ProductSummary, ReviewItem, ReviewListResponse,
 )
 
@@ -49,6 +49,21 @@ def products(
 def available_filters():
     brands, genders = repository.filters()
     return DiscoverFilters(brands=brands, genders=genders)
+
+
+@router.get("/banners", response_model=BannerListResponse, summary="DB에 등록된 홈 배너 목록")
+def banners():
+    rows = repository.list_banners()
+    items = [BannerSummary(seq=row["seq"], image_url=f"/api/v1/discover/banners/{row['seq']}/image") for row in rows]
+    return BannerListResponse(items=items, total=len(items))
+
+
+@router.get("/banners/{banner_seq}/image", summary="홈 배너 이미지 BLOB")
+def banner_image(banner_seq: int):
+    image = repository.get_banner_image(banner_seq)
+    if not image:
+        raise HTTPException(status_code=404, detail={"code": "BANNER_IMAGE_NOT_FOUND", "message": "등록된 배너 이미지가 없습니다."})
+    return Response(content=image, media_type="image/jpeg")
 
 
 @router.get("/products/{product_code}", response_model=ProductDetail, summary="상품 코드별 상세와 등록 옵션")
