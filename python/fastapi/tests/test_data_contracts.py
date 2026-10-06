@@ -154,6 +154,99 @@ def test_order_status_change_adds_customer_notification(tmp_path, monkeypatch):
     assert '홍대점' in notifications['items'][0]['body']
 
 
+def test_pickup_completion_adds_customer_notification(tmp_path, monkeypatch):
+    from python.fastapi.local_store import LocalStore
+    from python.fastapi.order.schemas import PickupConfirm
+
+    local = LocalStore(tmp_path / 'pickup-notification.sqlite3')
+    local.initialize()
+    monkeypatch.setattr(order, '_customer', lambda *_: None)
+    monkeypatch.setattr(order.repository, 'confirm_pickup', lambda *_: {
+        'customer_id': 'buyer@example.com', 'store_name': '홍대점',
+    })
+    monkeypatch.setattr(order, '_detail', lambda *_: {'order_number': 'FPTEST', 'picked_up': True})
+
+    result = order.pickup_confirm('FPTEST', PickupConfirm(customer_id='buyer@example.com', code='123456'), local)
+
+    notifications = local.notifications('buyer@example.com', 20, 0)
+    assert result['picked_up'] is True
+    assert notifications['total'] == notifications['unreadCount'] == 1
+    assert notifications['items'][0]['title'] == '주문 수령이 완료되었습니다.'
+    assert '홍대점' in notifications['items'][0]['body']
+
+
+def test_order_creation_and_cancellation_add_notifications(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from python.fastapi.local_store import LocalStore
+    from python.fastapi.order.schemas import CustomerRef, OrderCreate
+
+    local = LocalStore(tmp_path / 'order-events.sqlite3')
+    local.initialize()
+    monkeypatch.setattr(order, '_customer', lambda *_: None)
+    monkeypatch.setattr(order, '_purchase_schema', lambda: None)
+    monkeypatch.setattr(order.repository, 'create_order', lambda *_: 'FPTEST')
+    monkeypatch.setattr(order.repository, 'cancel_order', lambda *_: None)
+    monkeypatch.setattr(order, '_detail', lambda *_: SimpleNamespace(store_name='홍대점'))
+    body = OrderCreate(customer_id='buyer@example.com', orderer_name='Buyer', orderer_phone='010-1234-5678',
+                       payment_method='카드', dealer_seq=1, agreed=True)
+
+    order.order_create(body, local)
+    order.order_cancel('FPTEST', CustomerRef(customer_id='buyer@example.com'), local)
+
+    items = local.notifications('buyer@example.com', 20, 0)['items']
+    assert [item['title'] for item in items] == ['주문 취소가 처리되었습니다.', '주문이 접수되었습니다.']
+    assert all('FPTEST' in item['body'] for item in items)
+
+
+@pytest.mark.parametrize(('claim_type', 'expected_title'), [
+    ('RETURN', '환불(반품) 신청이 접수되었습니다.'),
+    ('EXCHANGE', '교환 신청이 접수되었습니다.'),
+])
+def test_claim_submission_adds_customer_notification(tmp_path, monkeypatch, claim_type, expected_title):
+    from python.fastapi.local_store import LocalStore
+    from python.fastapi.order.schemas import ClaimCreate
+
+    local = LocalStore(tmp_path / f'{claim_type.lower()}-request-notification.sqlite3')
+    local.initialize()
+    monkeypatch.setattr(order, '_customer', lambda *_: None)
+    monkeypatch.setattr(order, '_decode_photos', lambda *_: [])
+    monkeypatch.setattr(order.repository, 'create_claim', lambda *_: 43)
+    monkeypatch.setattr(order, '_claims', lambda *_args, **_kwargs: [object()])
+    body = ClaimCreate(customer_id='buyer@example.com', order_number='FPTEST', order_item_id=7,
+                       claim_type=claim_type, reason='기타', detail='요청 상세 내용입니다.', dealer_seq=1,
+                       requested_size=250 if claim_type == 'EXCHANGE' else None)
+
+    result = order.claim_create(body, local)
+
+    notifications = local.notifications('buyer@example.com', 20, 0)
+    assert result is not None
+    assert notifications['items'][0]['title'] == expected_title
+    assert 'FPTEST' in notifications['items'][0]['body']
+
+
+@pytest.mark.parametrize(('claim_type', 'expected_title'), [
+    ('RETURN', '환불 처리가 완료되었습니다.'),
+    ('EXCHANGE', '교환 처리가 완료되었습니다.'),
+])
+def test_claim_completion_adds_type_specific_notification(tmp_path, monkeypatch, claim_type, expected_title):
+    from python.fastapi.local_store import LocalStore
+    from python.fastapi.order.schemas import ClaimStatusUpdate
+
+    local = LocalStore(tmp_path / f'{claim_type.lower()}-notification.sqlite3')
+    local.initialize()
+    monkeypatch.setattr(order.repository, 'advance_claim', lambda *_: {
+        'customer_id': 'buyer@example.com', 'order_number': 'FPTEST', 'claim_type': claim_type,
+        'status': 'DONE',
+    })
+
+    result = order.admin_claim_status(42, ClaimStatusUpdate(status='DONE'), local)
+
+    notifications = local.notifications('buyer@example.com', 20, 0)
+    assert result['status'] == 'DONE'
+    assert notifications['items'][0]['title'] == expected_title
+    assert 'FPTEST' in notifications['items'][0]['body']
+
+
 def test_existing_auth_user_cannot_use_legacy_password(monkeypatch):
     accounts = Accounts(None)
     monkeypatch.setattr(accounts, 'find', lambda *_: object())
@@ -316,6 +409,7 @@ def test_cart_storage_is_sqlite_and_does_not_require_mysql_order_tables(tmp_path
 
 def test_mock_checkout_writes_initial_purchase_schema_and_clears_sqlite_cart(tmp_path, monkeypatch):
     from contextlib import contextmanager
+    from types import SimpleNamespace
     from python.fastapi.order.schemas import OrderCreate
 
     local = LocalStore(tmp_path / 'purchase-test.sqlite3')
@@ -359,6 +453,18 @@ def test_mock_checkout_writes_initial_purchase_schema_and_clears_sqlite_cart(tmp
 
     monkeypatch.setattr(order.repository, 'get_local', lambda: local)
     monkeypatch.setattr(order.repository, '_transaction', fake_transaction)
+    inventory_events = []
+    inventory_client = object()
+    monkeypatch.setattr(order.repository, 'get_accounts', lambda: SimpleNamespace(client=inventory_client))
+
+    def reserve_stock(client, order_number, items):
+        assert client is inventory_client
+        assert [(item['p_code'], item['quantity']) for item in items] == [('P1002', 2)]
+        inventory_events.append(('reserve', order_number))
+
+    monkeypatch.setattr(order.repository.stock_inventory, 'reserve_stock', reserve_stock)
+    monkeypatch.setattr(order.repository.stock_inventory, 'commit_stock',
+                        lambda client, order_number: inventory_events.append(('commit', order_number)))
     payload = OrderCreate(
         customer_id='buyer@example.com', orderer_name='Buyer', orderer_phone='010-1234-5678',
         payment_method='신용 / 체크카드', dealer_seq=2, agreed=True,
@@ -382,8 +488,43 @@ def test_mock_checkout_writes_initial_purchase_schema_and_clears_sqlite_cart(tmp
     assert order_row[7:13] == ('Buyer', '010-1234-5678', 2, 'Central Store', 'Seoul', '신용 / 체크카드')
     assert order_row[15:18] == (258000, 0, 258000)
     assert order_row[18] is not None
+    assert inventory_events == [('reserve', order_code), ('commit', order_code)]
     with local.connection() as conn:
         assert conn.execute('SELECT COUNT(*) FROM cart_items').fetchone()[0] == 0
+
+
+def test_model_stock_allocation_aggregates_skus_and_rejects_shortage():
+    from types import SimpleNamespace
+    from python.fastapi.order.inventory import StockError, _allocate_inventory
+
+    document = SimpleNamespace(
+        id='MODEL-P2001-240',
+        to_dict=lambda: {
+            'productId': 'P2001-240',
+            'productCodes': ['P2001-240', 'P2001-250', 'P2002-240'],
+            'minimumQuantity': 100,
+            'currentQuantity': 5,
+        },
+    )
+    allocations = _allocate_inventory([
+        document,
+    ], [
+        {'p_code': 'P2001-240', 'quantity': 1},
+        {'p_code': 'P2001-250', 'quantity': 2},
+    ])
+    assert allocations == [{'document_id': 'MODEL-P2001-240', 'quantity': 3}]
+
+    with pytest.raises(StockError) as error:
+        _allocate_inventory([document], [{'p_code': 'P2002-240', 'quantity': 6}])
+    assert error.value.code == 'INSUFFICIENT_STOCK'
+
+
+def test_model_stock_allocation_requires_a_registered_inventory_document():
+    from python.fastapi.order.inventory import StockError, _allocate_inventory
+
+    with pytest.raises(StockError) as error:
+        _allocate_inventory([], [{'p_code': 'P-NOT-MAPPED', 'quantity': 1}])
+    assert error.value.code == 'INVENTORY_NOT_CONFIGURED'
 
 
 def test_cart_api_no_longer_checks_mysql_order_schema(client, monkeypatch):

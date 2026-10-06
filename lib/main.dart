@@ -1,8 +1,10 @@
 import 'package:bootcamp_teamproject_1/discover/splash_page.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_naver_map/flutter_naver_map.dart';
 
 import 'firebase_options.dart';
 import 'services/erd_seed_service.dart';
@@ -11,6 +13,13 @@ import 'services/erd_seed_service.dart';
 /// `SEED_ERD=true`는 개발용 Firestore 시드를 별도로 요청한 경우에만 동작한다.
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  const naverMapClientId = String.fromEnvironment('NAVER_MAP_CLIENT_ID');
+  if (naverMapClientId.isNotEmpty && !kIsWeb) {
+    await FlutterNaverMap().init(
+      clientId: naverMapClientId,
+      onAuthFailed: (_) => debugPrint('Naver Map authentication failed.'),
+    );
+  }
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   if (const bool.fromEnvironment('SEED_ERD')) {
     await ErdSeedService().seedTestData();

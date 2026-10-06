@@ -7,6 +7,7 @@
 import os
 import secrets
 import uuid
+import logging
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 
@@ -14,6 +15,8 @@ import pymysql
 from python import db
 from ..dependencies import get_local
 from ..discover import repository as discover_repository
+from ..accounts import get_accounts
+from . import inventory as stock_inventory
 
 MAX_QUANTITY = 10
 PICKUP_HOLD_DAYS = 3          # 수령 준비 완료 후 매장 보관 기간
@@ -218,51 +221,75 @@ def create_order(customer_id, data, payment_methods):
     if not cart_rows:
         raise OrderError(409, "CART_EMPTY", "주문할 상품을 장바구니에서 선택해 주세요.")
 
-    with _transaction() as cur:
-        # SQLite 장바구니의 선택 상품코드와 MySQL 상품행을 대조해 가격·옵션을 서버에서 다시 읽는다.
-        codes = [row["p_code"] for row in cart_rows]
-        marks = ", ".join(["%s"] * len(codes))
-        cur.execute("SELECT p_code, p_name, b_name, p_price, p_color, p_size "
-                    f"FROM product WHERE p_code IN ({marks}) FOR UPDATE", codes)
-        product_rows = {row["p_code"]: row for row in cur.fetchall()}
-        items = [{**product_rows[row["p_code"]], **row} for row in cart_rows if row["p_code"] in product_rows]
-        if len(items) != len(cart_rows):
-            raise OrderError(409, "CART_PRODUCT_UNAVAILABLE", "장바구니에 현재 판매되지 않는 상품이 포함되어 있습니다.")
+    order_number = f"FP{uuid.uuid4().hex[:18].upper()}"
+    inventory_client = None
+    reservation_created = False
+    try:
+        with _transaction() as cur:
+            # SQLite 장바구니의 선택 상품코드와 MySQL 상품행을 대조해 가격·옵션을 서버에서 다시 읽는다.
+            codes = [row["p_code"] for row in cart_rows]
+            marks = ", ".join(["%s"] * len(codes))
+            cur.execute("SELECT p_code, p_name, b_name, p_price, p_color, p_size "
+                        f"FROM product WHERE p_code IN ({marks}) FOR UPDATE", codes)
+            product_rows = {row["p_code"]: row for row in cur.fetchall()}
+            items = [{**product_rows[row["p_code"]], **row} for row in cart_rows if row["p_code"] in product_rows]
+            if len(items) != len(cart_rows):
+                raise OrderError(409, "CART_PRODUCT_UNAVAILABLE", "장바구니에 현재 판매되지 않는 상품이 포함되어 있습니다.")
 
-        # 선택 지점은 주문 생성 시 실제 authorized_dealer를 검증하고 purchase에 고정한다.
-        cur.execute("SELECT seq,name,address FROM authorized_dealer WHERE seq=%s FOR UPDATE",
-                    (data.dealer_seq,))
-        dealer = cur.fetchone()
-        if dealer is None:
-            raise OrderError(422, "INVALID_PICKUP_STORE", "선택한 수령 대리점을 찾을 수 없습니다.")
+            # 선택 지점은 주문 생성 시 실제 authorized_dealer를 검증하고 purchase에 고정한다.
+            cur.execute("SELECT seq,name,address FROM authorized_dealer WHERE seq=%s FOR UPDATE",
+                        (data.dealer_seq,))
+            dealer = cur.fetchone()
+            if dealer is None:
+                raise OrderError(422, "INVALID_PICKUP_STORE", "선택한 수령 대리점을 찾을 수 없습니다.")
 
-        subtotal = sum(int(str(row["p_price"]).replace(",", "")) * row["quantity"] for row in items)
-        discount, coupon_name = 0, None
-        if data.coupon_id is not None:
-            cur.execute("SELECT c.name, c.discount_type, c.discount_value FROM customer_coupon cc "
-                        "JOIN coupon c ON c.coupon_id = cc.coupon_id WHERE cc.customer_id = %s AND cc.coupon_id = %s "
-                        "AND cc.used_at IS NULL AND cc.expires_at >= %s FOR UPDATE",
-                        (customer_id, data.coupon_id, now))
-            coupon = cur.fetchone()
-            if coupon is None:
-                raise OrderError(409, "COUPON_UNAVAILABLE", "사용할 수 없는 쿠폰입니다.")
-            discount, coupon_name = discount_of(coupon, subtotal), coupon["name"]
-            cur.execute("UPDATE customer_coupon SET used_at = %s WHERE customer_id = %s AND coupon_id = %s",
-                        (now, customer_id, data.coupon_id))
+            subtotal = sum(int(str(row["p_price"]).replace(",", "")) * row["quantity"] for row in items)
+            discount, coupon_name = 0, None
+            if data.coupon_id is not None:
+                cur.execute("SELECT c.name, c.discount_type, c.discount_value FROM customer_coupon cc "
+                            "JOIN coupon c ON c.coupon_id = cc.coupon_id WHERE cc.customer_id = %s AND cc.coupon_id = %s "
+                            "AND cc.used_at IS NULL AND cc.expires_at >= %s FOR UPDATE",
+                            (customer_id, data.coupon_id, now))
+                coupon = cur.fetchone()
+                if coupon is None:
+                    raise OrderError(409, "COUPON_UNAVAILABLE", "사용할 수 없는 쿠폰입니다.")
+                discount, coupon_name = discount_of(coupon, subtotal), coupon["name"]
+                cur.execute("UPDATE customer_coupon SET used_at = %s WHERE customer_id = %s AND coupon_id = %s",
+                            (now, customer_id, data.coupon_id))
 
-        head_office_id = _resolve_head_office(cur)
-        order_number = f"FP{uuid.uuid4().hex[:18].upper()}"
-        cur.executemany(
-            "INSERT INTO purchase (order_code,customer_customer_id,head_office_id,p_code,p_date,p_price,quantity,"
-            "order_status,orderer_name,orderer_phone,dealer_seq,store_name,store_address,payment_method,coupon_id,"
-            "coupon_name,subtotal,discount,order_total,status_changed_at) "
-            "VALUES (%s,%s,%s,%s,%s,%s,%s,'PAID',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-            [(order_number, customer_id, head_office_id, row["p_code"], now,
-              int(str(row["p_price"]).replace(",", "")), row["quantity"], data.orderer_name,
-              data.orderer_phone, dealer["seq"], dealer["name"], dealer["address"], data.payment_method,
-              data.coupon_id, coupon_name, subtotal, discount, subtotal - discount, now)
-             for row in items],
-        )
+            head_office_id = _resolve_head_office(cur)
+            # Firebase 모델 재고는 Firestore transaction으로 선점한다. DB 주문 실패 시 아래에서 보상 복구한다.
+            inventory_client = get_accounts().client
+            stock_inventory.reserve_stock(inventory_client, order_number, items)
+            reservation_created = True
+            cur.executemany(
+                "INSERT INTO purchase (order_code,customer_customer_id,head_office_id,p_code,p_date,p_price,quantity,"
+                "order_status,orderer_name,orderer_phone,dealer_seq,store_name,store_address,payment_method,coupon_id,"
+                "coupon_name,subtotal,discount,order_total,status_changed_at) "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,'PAID',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                [(order_number, customer_id, head_office_id, row["p_code"], now,
+                  int(str(row["p_price"]).replace(",", "")), row["quantity"], data.orderer_name,
+                  data.orderer_phone, dealer["seq"], dealer["name"], dealer["address"], data.payment_method,
+                  data.coupon_id, coupon_name, subtotal, discount, subtotal - discount, now)
+                 for row in items],
+            )
+    except stock_inventory.StockError as exc:
+        raise OrderError(exc.status, exc.code, exc.message) from exc
+    except Exception:
+        if reservation_created and inventory_client is not None:
+            try:
+                stock_inventory.release_stock(inventory_client, order_number)
+            except stock_inventory.StockError:
+                logging.getLogger(__name__).exception("Order failed and stock reservation needs reconciliation")
+                raise OrderError(503, "INVENTORY_RECONCILIATION_REQUIRED",
+                                 "주문 저장은 실패했지만 재고 예약 복구가 지연되고 있습니다. 관리자 확인이 필요합니다.")
+        raise
+
+    try:
+        stock_inventory.commit_stock(inventory_client, order_number)
+    except stock_inventory.StockError:
+        # MySQL 주문은 이미 확정됐다. 예약 상태 갱신 실패만 기록하고 재고 차감은 유지한다.
+        logging.getLogger(__name__).exception("Order saved but stock reservation finalization is pending")
     # MySQL 주문 커밋이 완료된 뒤에만 SQLite 장바구니를 비운다.
     with get_local().connection() as conn:
         marks = ",".join(["?"] * len(cart_rows))
@@ -337,15 +364,24 @@ def cancel_order(customer_id, order_number):
     now = datetime.now()
     with _transaction() as cur:
         order = _lock_order(cur, order_number, customer_id)
-        if order["status"] not in CANCELLABLE:
+        if order["status"] == "CANCELLED":
+            # 재고 복구가 앞선 요청에서 실패했을 수 있어 아래에서 안전하게 재시도한다.
+            pass
+        elif order["status"] not in CANCELLABLE:
             raise OrderError(409, "ORDER_NOT_CANCELLABLE", "본사에서 발송을 시작한 주문은 취소할 수 없습니다.")
-        cur.execute("UPDATE purchase SET order_status='CANCELLED',status_changed_at=%s,cancelled_at=%s,"
-                    "pickup_code=NULL,pickup_code_expires=NULL WHERE order_code=%s",
-                    (now, now, order_number))
-        if order["coupon_id"] is not None:
-            # 아직 유효기간이 남은 쿠폰은 다시 사용할 수 있게 돌려준다.
-            cur.execute("UPDATE customer_coupon SET used_at = NULL WHERE customer_id = %s AND coupon_id = %s "
-                        "AND expires_at >= %s", (customer_id, order["coupon_id"], now))
+        else:
+            cur.execute("UPDATE purchase SET order_status='CANCELLED',status_changed_at=%s,cancelled_at=%s,"
+                        "pickup_code=NULL,pickup_code_expires=NULL WHERE order_code=%s",
+                        (now, now, order_number))
+            if order["coupon_id"] is not None:
+                # 아직 유효기간이 남은 쿠폰은 다시 사용할 수 있게 돌려준다.
+                cur.execute("UPDATE customer_coupon SET used_at = NULL WHERE customer_id = %s AND coupon_id = %s "
+                            "AND expires_at >= %s", (customer_id, order["coupon_id"], now))
+    # 취소가 확정된 주문은 본사 모델 재고로 되돌린다. 실패 시 동일 취소 API 재호출로 복구를 재시도할 수 있다.
+    try:
+        stock_inventory.restore_cancelled_order_stock(get_accounts().client, order_number)
+    except stock_inventory.StockError as exc:
+        raise OrderError(503, exc.code, exc.message) from exc
 
 
 def advance_order(order_number, status):
@@ -394,6 +430,7 @@ def confirm_pickup(customer_id, order_number, code):
         cur.execute("UPDATE customer SET totalprice = totalprice + %s WHERE customer_id = %s",
                     (order["paid_amount"], customer_id))
         # purchase는 주문 접수 순간부터 기준 원본이다. 수령 시 별도 purchase 행을 중복 생성하지 않는다.
+    return order
 
 
 # ---------- 교환/반품 ----------
@@ -492,7 +529,8 @@ def get_claim_photo(customer_id, claim_id, photo_id):
 def advance_claim(claim_id, status):
     """본사 처리: 다음 단계로만 진행하고, 완료 전에는 반려할 수 있다."""
     with _transaction() as cur:
-        cur.execute("SELECT status FROM order_claim WHERE claim_id = %s FOR UPDATE", (claim_id,))
+        cur.execute("SELECT status,customer_id,order_code,claim_type FROM order_claim WHERE claim_id = %s FOR UPDATE",
+                    (claim_id,))
         row = cur.fetchone()
         if row is None:
             raise OrderError(404, "CLAIM_NOT_FOUND", "교환·반품 신청을 찾을 수 없습니다.")
@@ -503,3 +541,6 @@ def advance_claim(claim_id, status):
             raise OrderError(409, "INVALID_STATUS_TRANSITION", f"{current} 상태에서 {status}(으)로 바꿀 수 없습니다.")
         cur.execute("UPDATE order_claim SET status = %s, updated_at = %s WHERE claim_id = %s",
                     (status, datetime.now(), claim_id))
+        result = dict(row)
+        result["status"] = status
+    return result
