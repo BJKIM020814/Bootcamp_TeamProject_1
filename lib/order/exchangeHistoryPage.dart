@@ -1,4 +1,5 @@
 import 'package:bootcamp_teamproject_1/order/cartPage.dart';
+import 'package:bootcamp_teamproject_1/common/fitpick_snackbar.dart';
 import 'package:bootcamp_teamproject_1/order/orderApi.dart';
 import 'package:bootcamp_teamproject_1/order/orderDetailPage.dart';
 import 'package:flutter/material.dart';
@@ -45,9 +46,7 @@ class _ExchangehistorypageState extends State<Exchangehistorypage> {
       latest = await OrderApi.claim(claim.claimId);
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.toString())),
-        );
+        showFitpickSnackbar(error.toString(), title: '오류');
       }
       return;
     }
@@ -73,7 +72,10 @@ class _ExchangehistorypageState extends State<Exchangehistorypage> {
             _buildClaimStepper(latest.stageIndex),
             if (latest.photoUrls.isNotEmpty) ...[
               const SizedBox(height: 16),
-              const Text('첨부 사진', style: TextStyle(fontWeight: FontWeight.bold)),
+              const Text(
+                '첨부 사진',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 8),
               Row(
                 children: [
@@ -139,7 +141,10 @@ class _ExchangehistorypageState extends State<Exchangehistorypage> {
                   children: [
                     Text(_error!, textAlign: TextAlign.center),
                     const SizedBox(height: 12),
-                    OutlinedButton(onPressed: _load, child: const Text('다시 시도')),
+                    OutlinedButton(
+                      onPressed: _load,
+                      child: const Text('다시 시도'),
+                    ),
                   ],
                 )
               else if (claims == null)
@@ -153,7 +158,10 @@ class _ExchangehistorypageState extends State<Exchangehistorypage> {
                   child: Center(
                     child: Text(
                       '교환·반품 신청 내역이 없습니다.',
-                      style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey.shade500,
+                      ),
                     ),
                   ),
                 )
@@ -189,11 +197,17 @@ class _ExchangehistorypageState extends State<Exchangehistorypage> {
                   children: [
                     Text(
                       formatDate(claim.requestedAt),
-                      style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey.shade500,
+                      ),
                     ),
                     Text(
                       claim.orderNumber,
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ],
                 ),
@@ -218,8 +232,10 @@ class _ExchangehistorypageState extends State<Exchangehistorypage> {
                     : Image.network(
                         item.imageUrl!,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) =>
-                            const Icon(Icons.image_outlined, color: Colors.grey),
+                        errorBuilder: (_, _, _) => const Icon(
+                          Icons.image_outlined,
+                          color: Colors.grey,
+                        ),
                       ),
               ),
               const SizedBox(width: 12),
@@ -238,24 +254,36 @@ class _ExchangehistorypageState extends State<Exchangehistorypage> {
                     ),
                     Text(
                       item.name,
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       item.optionLabel,
-                      style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                      ),
                     ),
                     const SizedBox(height: 6),
                     Row(
                       children: [
                         Text(
                           formatWon(item.price),
-                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                         const SizedBox(width: 8),
                         Text(
                           '수량 ${item.quantity}',
-                          style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade500,
+                          ),
                         ),
                       ],
                     ),
@@ -282,9 +310,14 @@ class _ExchangehistorypageState extends State<Exchangehistorypage> {
               ),
               Text(
                 formatWon(
-                  claim.isExchange ? item.price * item.quantity : claim.refundAmount,
+                  claim.isExchange
+                      ? item.price * item.quantity
+                      : claim.refundAmount,
                 ),
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ],
           ),
@@ -292,10 +325,16 @@ class _ExchangehistorypageState extends State<Exchangehistorypage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('신청 사유', style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
+              Text(
+                '신청 사유',
+                style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+              ),
               Text(
                 claim.reason,
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ],
           ),
@@ -326,7 +365,10 @@ class _ExchangehistorypageState extends State<Exchangehistorypage> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  child: const Text('구매 내역 보기', style: TextStyle(color: Colors.black)),
+                  child: const Text(
+                    '구매 내역 보기',
+                    style: TextStyle(color: Colors.black),
+                  ),
                 ),
               ),
               const SizedBox(width: 10),
@@ -340,7 +382,10 @@ class _ExchangehistorypageState extends State<Exchangehistorypage> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  child: const Text('처리 상태 확인', style: TextStyle(color: Colors.black)),
+                  child: const Text(
+                    '처리 상태 확인',
+                    style: TextStyle(color: Colors.black),
+                  ),
                 ),
               ),
             ],
@@ -356,7 +401,10 @@ class _ExchangehistorypageState extends State<Exchangehistorypage> {
     final fg = isExchange ? const Color(0xFF2F5D9E) : const Color(0xFF8A5A17);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: Text(
         '${claim.claimTypeLabel} · ${claim.statusLabel}',
         style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: fg),
@@ -379,7 +427,9 @@ class _ExchangehistorypageState extends State<Exchangehistorypage> {
                   Expanded(
                     child: Container(
                       height: 2,
-                      color: i == 0 ? Colors.transparent : (i <= stageIndex ? green : grey),
+                      color: i == 0
+                          ? Colors.transparent
+                          : (i <= stageIndex ? green : grey),
                     ),
                   ),
                   Container(

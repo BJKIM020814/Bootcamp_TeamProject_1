@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import '../common/fitpick_snackbar.dart';
 import '../services/fitpick_api_service.dart';
 import 'loginpage.dart';
 
@@ -95,9 +95,7 @@ class _SignUpPageState extends State<SignUpPage> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    showFitpickSnackbar(message);
   }
 
   void _goBack() {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import 'package:bootcamp_teamproject_1/common/fitpick_snackbar.dart';
 import 'package:bootcamp_teamproject_1/services/account_service.dart';
 import 'package:bootcamp_teamproject_1/user/authController.dart';
 
@@ -43,9 +44,7 @@ class _ProfilePageState extends State<ProfilePage> {
     super.dispose();
   }
 
-  void _toast(String message) => ScaffoldMessenger.of(
-    context,
-  ).showSnackBar(SnackBar(content: Text(message)));
+  void _toast(String message) => showFitpickSnackbar(message);
 
   /// 이름/전화번호/신발 사이즈를 Firebase account 원본에 함께 저장한다.
   Future<void> _save() async {

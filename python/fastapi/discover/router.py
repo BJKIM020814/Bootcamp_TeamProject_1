@@ -39,16 +39,17 @@ def products(
     keyword: Optional[str] = Query(default=None, max_length=45, description="상품명·브랜드·상품코드 검색"),
     brand: Optional[str] = Query(default=None, max_length=45),
     gender: Optional[str] = Query(default=None, max_length=45),
+    purpose: Optional[str] = Query(default=None, max_length=50, description="등록된 용도 분류"),
     limit: int = Query(default=20, ge=1, le=100), offset: int = Query(default=0, ge=0),
 ):
-    rows, total = repository.list_products(brand, gender, keyword, limit, offset)
+    rows, total = repository.list_products(brand, gender, keyword, limit, offset, purpose)
     return ProductListResponse(items=[_summary(row) for row in rows], total=total, limit=limit, offset=offset)
 
 
 @router.get("/filters", response_model=DiscoverFilters, summary="현재 등록된 Discover 필터 값")
 def available_filters():
-    brands, genders = repository.filters()
-    return DiscoverFilters(brands=brands, genders=genders)
+    brands, genders, purposes = repository.filters()
+    return DiscoverFilters(brands=brands, genders=genders, purposes=purposes)
 
 
 @router.get("/banners", response_model=BannerListResponse, summary="DB에 등록된 홈 배너 목록")

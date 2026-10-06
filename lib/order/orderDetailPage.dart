@@ -1,4 +1,5 @@
 import 'package:bootcamp_teamproject_1/order/cartPage.dart';
+import 'package:bootcamp_teamproject_1/common/fitpick_snackbar.dart';
 import 'package:bootcamp_teamproject_1/order/exchangeRequestPage.dart';
 import 'package:bootcamp_teamproject_1/order/orderApi.dart';
 import 'package:bootcamp_teamproject_1/order/orderHistoryPage.dart';
@@ -40,7 +41,7 @@ class _OrderdetailpageState extends State<Orderdetailpage> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    showFitpickSnackbar(message, title: '오류');
   }
 
   Future<void> _openPickupQr(OrderDetail order) async {
@@ -120,7 +121,10 @@ class _OrderdetailpageState extends State<Orderdetailpage> {
             children: [
               Text(
                 order.storeName,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 4),
               Text(
@@ -198,7 +202,9 @@ class _OrderdetailpageState extends State<Orderdetailpage> {
                           _sectionTitle('수령 매장'),
                           const SizedBox(height: 10),
                           _buildStoreCard(order),
-                          if (!order.canCancel && !order.pickedUp && !order.isCancelled) ...[
+                          if (!order.canCancel &&
+                              !order.pickedUp &&
+                              !order.isCancelled) ...[
                             const SizedBox(height: 10),
                             _buildLockNotice(),
                           ],
@@ -241,13 +247,33 @@ class _OrderdetailpageState extends State<Orderdetailpage> {
   }
 
   Widget _buildHeader(OrderDetail order) {
-    final (IconData icon, Color color, String title, String message) = order.pickedUp
-        ? (Icons.check, Colors.green, '좋은 신발과 좋은 하루를', '매장 수령이 완료되었어요. 착용 후기를 들려주세요.')
+    final (
+      IconData icon,
+      Color color,
+      String title,
+      String message,
+    ) = order.pickedUp
+        ? (
+            Icons.check,
+            Colors.green,
+            '좋은 신발과 좋은 하루를',
+            '매장 수령이 완료되었어요. 착용 후기를 들려주세요.',
+          )
         : order.isCancelled
         ? (Icons.close, Colors.grey, '취소된 주문입니다', '주문이 취소되어 상품이 발송되지 않습니다.')
         : order.status == 'READY'
-        ? (Icons.inventory_2_outlined, Colors.black, '수령 준비가 완료되었어요', '매장에 방문해 수령증을 보여주세요.')
-        : (Icons.local_shipping_outlined, Colors.black, order.statusLabel, '본사에서 수령 매장으로 보내는 주문입니다. 도착·검수 후 픽업을 안내합니다.');
+        ? (
+            Icons.inventory_2_outlined,
+            Colors.black,
+            '수령 준비가 완료되었어요',
+            '매장에 방문해 수령증을 보여주세요.',
+          )
+        : (
+            Icons.local_shipping_outlined,
+            Colors.black,
+            order.statusLabel,
+            '본사에서 수령 매장으로 보내는 주문입니다. 도착·검수 후 픽업을 안내합니다.',
+          );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -273,7 +299,10 @@ class _OrderdetailpageState extends State<Orderdetailpage> {
               const SizedBox(height: 14),
               Text(
                 title,
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 6),
               Text(
@@ -320,7 +349,9 @@ class _OrderdetailpageState extends State<Orderdetailpage> {
                   step.label,
                   style: TextStyle(
                     fontSize: 14,
-                    fontWeight: step.current ? FontWeight.bold : FontWeight.normal,
+                    fontWeight: step.current
+                        ? FontWeight.bold
+                        : FontWeight.normal,
                     color: step.done ? Colors.black : Colors.grey.shade500,
                   ),
                 ),
@@ -383,7 +414,10 @@ class _OrderdetailpageState extends State<Orderdetailpage> {
                     const SizedBox(height: 4),
                     Text(
                       item.optionLabel,
-                      style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                      ),
                     ),
                     const SizedBox(height: 6),
                     Text(
@@ -500,7 +534,10 @@ class _OrderdetailpageState extends State<Orderdetailpage> {
                     ),
                     Text(
                       order.storeAddress,
-                      style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                      ),
                     ),
                   ],
                 ),
@@ -529,7 +566,11 @@ class _OrderdetailpageState extends State<Orderdetailpage> {
                   ),
                 ),
                 const SizedBox(width: 2),
-                Icon(Icons.chevron_right, size: 16, color: Colors.grey.shade700),
+                Icon(
+                  Icons.chevron_right,
+                  size: 16,
+                  color: Colors.grey.shade700,
+                ),
               ],
             ),
           ),
@@ -570,7 +611,9 @@ class _OrderdetailpageState extends State<Orderdetailpage> {
           Text(label, style: TextStyle(color: Colors.grey.shade700)),
           Text(
             value,
-            style: TextStyle(fontWeight: bold ? FontWeight.bold : FontWeight.normal),
+            style: TextStyle(
+              fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+            ),
           ),
         ],
       ),
@@ -578,8 +621,10 @@ class _OrderdetailpageState extends State<Orderdetailpage> {
     return Column(
       children: [
         row('상품 금액', formatWon(order.subtotal)),
-        row(order.couponName == null ? '쿠폰 할인' : '쿠폰 할인 (${order.couponName})',
-            formatWon(-order.discount)),
+        row(
+          order.couponName == null ? '쿠폰 할인' : '쿠폰 할인 (${order.couponName})',
+          formatWon(-order.discount),
+        ),
         row(order.paymentMethod, formatWon(order.paidAmount), bold: true),
         row('주문자', '${order.ordererName} · ${order.ordererPhone}'),
       ],
@@ -597,9 +642,16 @@ class _OrderdetailpageState extends State<Orderdetailpage> {
         ],
       );
     } else if (order.status == 'READY') {
-      child = _primaryButton('매장 수령증 보기', () => _openPickupQr(order), icon: Icons.qr_code_2);
+      child = _primaryButton(
+        '매장 수령증 보기',
+        () => _openPickupQr(order),
+        icon: Icons.qr_code_2,
+      );
     } else if (order.canCancel) {
-      child = _primaryButton(_busy ? '취소 처리 중…' : '주문 취소', _busy ? null : () => _cancelOrder(order));
+      child = _primaryButton(
+        _busy ? '취소 처리 중…' : '주문 취소',
+        _busy ? null : () => _cancelOrder(order),
+      );
     } else if (order.isCancelled) {
       child = _outlinedButton('구매 내역', _goPurchaseHistory);
     } else {
@@ -615,7 +667,11 @@ class _OrderdetailpageState extends State<Orderdetailpage> {
     );
   }
 
-  Widget _primaryButton(String label, VoidCallback? onPressed, {IconData? icon}) {
+  Widget _primaryButton(
+    String label,
+    VoidCallback? onPressed, {
+    IconData? icon,
+  }) {
     return SizedBox(
       height: 50,
       child: ElevatedButton(
@@ -624,12 +680,17 @@ class _OrderdetailpageState extends State<Orderdetailpage> {
           backgroundColor: Colors.black,
           foregroundColor: Colors.white,
           disabledBackgroundColor: Colors.grey.shade300,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            if (icon != null) ...[Icon(icon, size: 20), const SizedBox(width: 8)],
+            if (icon != null) ...[
+              Icon(icon, size: 20),
+              const SizedBox(width: 8),
+            ],
             Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
           ],
         ),

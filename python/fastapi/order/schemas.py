@@ -203,7 +203,7 @@ class ClaimOptions(BaseModel):
 
 class ClaimCreate(BaseModel):
     customer_id: CustomerId
-    order_number: str = Field(max_length=20)
+    order_number: str = Field(max_length=21)
     order_item_id: int
     claim_type: ClaimType
     reason: str = Field(examples=["사이즈가 작아요"])

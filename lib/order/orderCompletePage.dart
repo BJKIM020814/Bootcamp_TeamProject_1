@@ -1,4 +1,5 @@
 import 'package:bootcamp_teamproject_1/discover/home_page.dart';
+import 'package:bootcamp_teamproject_1/common/fitpick_snackbar.dart';
 import 'package:bootcamp_teamproject_1/order/cartPage.dart';
 import 'package:bootcamp_teamproject_1/order/orderApi.dart';
 import 'package:bootcamp_teamproject_1/order/orderDetailPage.dart';
@@ -30,9 +31,7 @@ class _OrdercompletepageState extends State<Ordercompletepage> {
 
   void _copyOrderNumber() {
     Clipboard.setData(ClipboardData(text: widget.orderNumber));
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('주문번호를 복사했습니다.')),
-    );
+    showFitpickSnackbar('주문번호를 복사했습니다.', title: '완료');
   }
 
   void _openOrderDetail() {
@@ -221,11 +220,7 @@ class _OrdercompletepageState extends State<Ordercompletepage> {
       ),
       child: Row(
         children: [
-          Icon(
-            Icons.notifications_none,
-            size: 18,
-            color: Colors.grey.shade600,
-          ),
+          Icon(Icons.notifications_none, size: 18, color: Colors.grey.shade600),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -238,7 +233,11 @@ class _OrdercompletepageState extends State<Ordercompletepage> {
     );
   }
 
-  Widget _buildSummaryRow(String label, String value, {bool emphasize = false}) {
+  Widget _buildSummaryRow(
+    String label,
+    String value, {
+    bool emphasize = false,
+  }) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [

@@ -24,6 +24,10 @@ class OrderItem(Output):
     pickup_status: Optional[str] = None
     dealer_id: Optional[int] = None
     payment_info: Optional[dict] = None
+    # 주문 테이블 기준 식별자/진행 상태. 레거시 purchase 행에는 존재하지 않는다.
+    order_number: Optional[str] = None
+    order_item_id: Optional[int] = None
+    order_status: Optional[str] = None
 
 
 class OrderPage(Output):

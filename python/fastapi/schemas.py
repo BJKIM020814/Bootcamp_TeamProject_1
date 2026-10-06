@@ -65,9 +65,27 @@ class SettingsPatch(Input):
 
 
 class ContactCreate(Input):
-    # ERD contact.context VARCHAR(50)에 맞춘다. 긴 본문은 DB 확장 후 변경.
-    # 이미지의 contact.context VARCHAR(50)에 맞춘다. 장문 문의는 DB와 검증을 함께 확장해야 한다.
-    content: str = Field(min_length=1, max_length=50)
+    # 레거시 contact의 45자 필드와 분리한 문의 테이블에 본문을 보관한다.
+    content: str = Field(min_length=1, max_length=2000)
+
+    @field_validator('content')
+    @classmethod
+    def contact_not_blank(cls, value):
+        if not value.strip():
+            raise ValueError('문의 내용을 입력해 주세요.')
+        return value.strip()
+
+
+class ContactMessageCreate(Input):
+    """회원이 기존 문의 대화에 추가하는 후속 메시지."""
+    content: str = Field(min_length=1, max_length=2000)
+
+    @field_validator('content')
+    @classmethod
+    def message_not_blank(cls, value):
+        if not value.strip():
+            raise ValueError('메시지를 입력해 주세요.')
+        return value.strip()
 
 
 # 응답 모델은 Swagger에서 프론트가 필드/타입을 확인할 수 있도록 제공한다.
@@ -146,13 +164,23 @@ class ReviewableOut(BaseModel):
 
 
 class ContactOut(BaseModel):
-    # 문의와 본사 답변을 함께 반환하며 미답변의 응답일은 null이다.
+    # 문의의 전체 대화와 마지막 답변 요약을 함께 반환한다.
     id: int
     content: str
     createdAt: datetime
     response: Optional[str]
     respondedAt: Optional[datetime]
     process: int
+    messages: list['ContactMessageOut'] = Field(default_factory=list)
+
+
+class ContactMessageOut(BaseModel):
+    id: Optional[int] = None
+    authorRole: Literal['customer', 'employee']
+    authorId: str
+    content: str
+    createdAt: datetime
+    turnIndex: int
 
 
 class SettingsOut(BaseModel):

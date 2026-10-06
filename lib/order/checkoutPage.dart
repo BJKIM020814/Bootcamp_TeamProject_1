@@ -1,4 +1,5 @@
 import 'package:bootcamp_teamproject_1/order/cartController.dart';
+import 'package:bootcamp_teamproject_1/common/fitpick_snackbar.dart';
 import 'package:bootcamp_teamproject_1/order/cartPage.dart';
 import 'package:bootcamp_teamproject_1/order/orderApi.dart';
 import 'package:bootcamp_teamproject_1/order/orderCompletePage.dart';
@@ -160,7 +161,7 @@ class _CheckoutpageState extends State<Checkoutpage> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    showFitpickSnackbar(message, title: '오류');
   }
 
   /// 서버에 주문을 만든다. 가격·할인은 서버가 다시 계산하고, 주문된 상품은 장바구니에서 빠진다.
@@ -179,9 +180,10 @@ class _CheckoutpageState extends State<Checkoutpage> {
       final order = await OrderApi.createOrder(
         ordererName: _ordererName,
         ordererPhone: _ordererPhone,
-        paymentMethod: _paymentMethods[
-          _paymentMethodIndex < _paymentMethods.length ? _paymentMethodIndex : 0
-        ],
+        paymentMethod:
+            _paymentMethods[_paymentMethodIndex < _paymentMethods.length
+                ? _paymentMethodIndex
+                : 0],
         couponId: _selectedCoupon?.couponId,
         dealerSeq: cartController.storeSeq.value,
         agreed: _agreed,
@@ -261,10 +263,7 @@ class _CheckoutpageState extends State<Checkoutpage> {
               border: Border.all(color: Colors.grey.shade300),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(
-              Icons.shopping_bag_outlined,
-              color: Colors.grey,
-            ),
+            child: const Icon(Icons.shopping_bag_outlined, color: Colors.grey),
           ),
           const SizedBox(height: 20),
           const Text(
@@ -436,10 +435,7 @@ class _CheckoutpageState extends State<Checkoutpage> {
                 Obx(
                   () => Text(
                     cartController.storeAddress.value,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade600,
-                    ),
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                   ),
                 ),
               ],
@@ -554,10 +550,7 @@ class _CheckoutpageState extends State<Checkoutpage> {
                   ),
                   child: Text(
                     '본사 발송 준비',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.grey.shade700,
-                    ),
+                    style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -644,9 +637,7 @@ class _CheckoutpageState extends State<Checkoutpage> {
           items: [
             DropdownMenuItem(
               value: 0,
-              child: Text(
-                _coupons.isEmpty ? '사용 가능한 쿠폰이 없습니다' : '쿠폰 사용 안 함',
-              ),
+              child: Text(_coupons.isEmpty ? '사용 가능한 쿠폰이 없습니다' : '쿠폰 사용 안 함'),
             ),
             for (var i = 0; i < _coupons.length; i++)
               DropdownMenuItem(
@@ -691,10 +682,7 @@ class _CheckoutpageState extends State<Checkoutpage> {
             ),
             Text(
               _formatWon(total),
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
           ],
         ),

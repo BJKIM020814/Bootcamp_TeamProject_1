@@ -5,6 +5,7 @@ import 'package:bootcamp_teamproject_1/user/loginpage.dart';
 import 'package:bootcamp_teamproject_1/user/signuppage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
@@ -44,7 +45,7 @@ void main() {
         );
       }),
     );
-    await tester.pumpWidget(MaterialApp(home: LoginPage(api: api)));
+    await tester.pumpWidget(GetMaterialApp(home: LoginPage(api: api)));
     await tester.tap(find.widgetWithText(OutlinedButton, '회원가입'));
     await tester.pumpAndSettle();
     await fillSignup(tester);
@@ -55,6 +56,10 @@ void main() {
     expect(find.byType(SignUpPage), findsNothing);
     expect(find.text('user@example.com'), findsOneWidget);
     expect(api.hasSession, isFalse);
+    expect(Get.isSnackbarOpen, isTrue);
+    final closeSnackbar = Get.closeCurrentSnackbar();
+    await tester.pumpAndSettle();
+    await closeSnackbar;
     api.dispose();
   });
 
@@ -74,13 +79,16 @@ void main() {
         ),
       ),
     );
-    await tester.pumpWidget(MaterialApp(home: SignUpPage(api: api)));
+    await tester.pumpWidget(GetMaterialApp(home: SignUpPage(api: api)));
     await fillSignup(tester);
     await tester.tap(find.widgetWithText(FilledButton, '회원가입'));
     await tester.pumpAndSettle();
     expect(find.byType(SignUpPage), findsOneWidget);
-    expect(find.text('이미 가입된 이메일입니다.'), findsOneWidget);
+    expect(Get.isSnackbarOpen, isTrue);
     expect(find.byType(LoginPage), findsNothing);
+    final closeSnackbar = Get.closeCurrentSnackbar();
+    await tester.pumpAndSettle();
+    await closeSnackbar;
     api.dispose();
   });
 }

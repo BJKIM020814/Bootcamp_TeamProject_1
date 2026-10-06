@@ -21,6 +21,7 @@ class _HomePageState extends State<HomePage> {
   final DiscoverApi _api = DiscoverApi();
   String? _gender;
   String? _brand;
+  String? _purpose;
   late Future<_HomeData> _home;
 
   @override
@@ -39,7 +40,7 @@ class _HomePageState extends State<HomePage> {
     final values = await Future.wait<Object>([
       _api.filters(),
       _api.banners(),
-      _api.products(gender: _gender, brand: _brand),
+      _api.products(gender: _gender, brand: _brand, purpose: _purpose),
     ]);
     return _HomeData(
       filters: values[0] as DiscoverFilters,
@@ -136,13 +137,33 @@ class _HomePageState extends State<HomePage> {
         if (data.filters.purposes.isEmpty)
           const _MissingPurposeNotice()
         else
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final purpose in data.filters.purposes)
-                ActionChip(label: Text(purpose), onPressed: _openProductList),
-            ],
+          SizedBox(
+            height: 42,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: data.filters.purposes.length + 1,
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              itemBuilder: (context, index) {
+                final purpose = index == 0
+                    ? null
+                    : data.filters.purposes[index - 1];
+                final selected = _purpose == purpose;
+                return ChoiceChip(
+                  label: Text(purpose ?? '전체'),
+                  selected: selected,
+                  showCheckmark: true,
+                  selectedColor: const Color(0xFF292522),
+                  labelStyle: TextStyle(
+                    color: selected ? Colors.white : const Color(0xFF292522),
+                    fontWeight: FontWeight.w700,
+                  ),
+                  onSelected: (_) {
+                    _purpose = purpose;
+                    _reload();
+                  },
+                );
+              },
+            ),
           ),
         const SizedBox(height: 24),
         const Text(

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import 'package:bootcamp_teamproject_1/common/fitpick_snackbar.dart';
 import 'package:bootcamp_teamproject_1/services/api_client.dart';
 
 import 'mypage_common.dart';
@@ -136,7 +136,7 @@ class _MpProductListViewState extends State<MpProductListView> {
         p.liked = !p.liked;
         if (!_items.contains(p)) _items.insert(index < 0 ? 0 : index, p);
       });
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      showFitpickSnackbar('$e', title: '오류');
     }
   }
 

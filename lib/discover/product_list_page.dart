@@ -9,10 +9,12 @@ class ProductListPage extends StatefulWidget {
     this.initialKeyword,
     this.initialBrand,
     this.initialGender,
+    this.initialPurpose,
   });
   final String? initialKeyword;
   final String? initialBrand;
   final String? initialGender;
+  final String? initialPurpose;
   @override
   State<ProductListPage> createState() => _ProductListPageState();
 }
@@ -22,6 +24,7 @@ class _ProductListPageState extends State<ProductListPage> {
   late final _search = TextEditingController(text: widget.initialKeyword ?? '');
   String? _brand;
   String? _gender;
+  String? _purpose;
   late Future<_CatalogData> _catalog;
 
   @override
@@ -29,6 +32,7 @@ class _ProductListPageState extends State<ProductListPage> {
     super.initState();
     _brand = widget.initialBrand;
     _gender = widget.initialGender;
+    _purpose = widget.initialPurpose;
     _catalog = _load();
   }
 
@@ -40,7 +44,12 @@ class _ProductListPageState extends State<ProductListPage> {
 
   Future<_CatalogData> _load() async => _CatalogData(
     await _api.filters(),
-    await _api.products(keyword: _search.text, brand: _brand, gender: _gender),
+    await _api.products(
+      keyword: _search.text,
+      brand: _brand,
+      gender: _gender,
+      purpose: _purpose,
+    ),
   );
   void _reload() {
     final nextCatalog = _load();
@@ -100,10 +109,15 @@ class _ProductListPageState extends State<ProductListPage> {
         const Padding(
           padding: EdgeInsets.only(top: 16),
           child: Text(
-            '용도 분류는 현재 DB에 등록된 필드가 없어 제공되지 않습니다.',
+            '등록된 상품 용도 분류가 없습니다.',
             style: TextStyle(fontSize: 12, color: Color(0xFF777068)),
           ),
         ),
+      if (data.filters.purposes.isNotEmpty)
+        _FilterRow('용도', data.filters.purposes, _purpose, (value) {
+          _purpose = value;
+          _reload();
+        }),
       const SizedBox(height: 24),
       Text(
         '총 ${data.products.length}개의 상품',

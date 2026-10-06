@@ -1,4 +1,5 @@
 import 'package:bootcamp_teamproject_1/discover/home_page.dart';
+import 'package:bootcamp_teamproject_1/common/fitpick_snackbar.dart';
 import 'package:bootcamp_teamproject_1/order/cartController.dart';
 import 'package:bootcamp_teamproject_1/order/checkoutPage.dart';
 import 'package:bootcamp_teamproject_1/order/orderApi.dart';
@@ -27,10 +28,9 @@ class _CartpageState extends State<Cartpage> {
   /// 서버 요청 결과가 실패면 이유를 스낵바로 보여준다.
   Future<void> _act(Future<bool> request) async {
     if (await request || !mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(cartController.errorMessage.value ?? '요청을 처리하지 못했습니다.'),
-      ),
+    showFitpickSnackbar(
+      cartController.errorMessage.value ?? '요청을 처리하지 못했습니다.',
+      title: '오류',
     );
   }
 
@@ -96,10 +96,7 @@ class _CartpageState extends State<Cartpage> {
               border: Border.all(color: Colors.grey.shade300),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(
-              Icons.shopping_bag_outlined,
-              color: Colors.grey,
-            ),
+            child: const Icon(Icons.shopping_bag_outlined, color: Colors.grey),
           ),
           const SizedBox(height: 20),
           const Text(
@@ -438,9 +435,7 @@ class _CartpageState extends State<Cartpage> {
               width: double.infinity,
               height: 50,
               child: ElevatedButton(
-                onPressed: cartController.selectedCount == 0
-                    ? null
-                    : _checkout,
+                onPressed: cartController.selectedCount == 0 ? null : _checkout,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.black,
                   foregroundColor: Colors.white,

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import '../common/fitpick_snackbar.dart';
 import '../discover/home_page.dart';
 import '../services/fitpick_api_service.dart';
 import 'authController.dart';
@@ -70,9 +70,7 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    showFitpickSnackbar(message);
   }
 
   // 서버 인증에 성공한 다음에만 기존 앱의 로그인 UI 상태를 변경한다.

@@ -49,6 +49,7 @@ class MemoryCommerce:
         self.customers = set()
         self.fail = False
         self.rows = {}
+        self.contact_owners = {}
 
     def sync_customer(self, account, age=None):
         if self.fail:
@@ -67,7 +68,15 @@ class MemoryCommerce:
         return row
 
     def create_contact(self, email, data):
+        self.contact_owners[1] = email
         return {'id': 1, 'content': data.content, 'process': 0, 'createdAt': '2026-10-02T00:00:00', 'response': '', 'respondedAt': None}
+
+    def append_customer_message(self, email, inquiry_id, content):
+        if self.contact_owners.get(inquiry_id) != email:
+            from fastapi import HTTPException
+            raise HTTPException(404, '문의를 찾을 수 없습니다.')
+        return {'id': 2, 'authorRole': 'customer', 'authorId': email, 'content': content,
+                'createdAt': '2026-10-02T00:00:00', 'turnIndex': 2}
 
 
 @pytest.fixture
@@ -82,7 +91,13 @@ def api(tmp_path, monkeypatch):
     # 기존 메모리 API 계약 테스트에서는 호환 스키마를 제공한다. 스키마 차단은 별도 회귀 테스트한다.
     def schema_columns(sql, params=None):
         assert 'information_schema.COLUMNS' in sql
-        fields = ('contact_seq', 'context', 'response', 'r_date', 'process', 'review_seq')
+        if params == ('inquiry_message',):
+            fields = ('message_id', 'customer_id', 'head_office_id', 'c_seq', 'turn_index',
+                      'parent_message_id', 'author_role', 'author_id', 'content', 'created_at')
+            return [{'name': key, 'extra': 'auto_increment' if key == 'message_id' else '',
+                     'max_length': 10000} for key in fields]
+        fields = ('inquiry_id', 'customer_id', 'head_office_id', 'content', 'response',
+                  'created_at', 'responded_at', 'process', 'review_seq')
         return [{'name': key, 'extra': 'auto_increment', 'max_length': 2000} for key in fields]
     monkeypatch.setattr(db, 'query', schema_columns)
     # API 계약 테스트에서는 Firebase Identity Toolkit 호출을 하지 않고 구형 계정 이관 경로를 검증한다.
@@ -178,6 +193,12 @@ def test_notifications_ownership_and_preferences(api):
     assert client.patch(f'/api/notifications/{notification}/read', headers=one).status_code == 200
     assert client.get('/api/notifications', headers=one).json()['unreadCount'] == 0
     assert client.post('/api/support/contacts', headers=one, json={'content': '문의드립니다'}).status_code == 201
+    response = client.post('/api/support/contacts/1/messages', headers=one,
+                           json={'content': '추가로 확인 부탁드립니다.'})
+    assert response.status_code == 201
+    assert response.json()['turnIndex'] == 2
+    assert client.post('/api/support/contacts/1/messages', headers=two,
+                       json={'content': '다른 사용자 메시지'}).status_code == 404
     assert client.patch('/api/notifications/read-all', headers=one).json()['updatedCount'] == 1
 
 
@@ -317,15 +338,14 @@ def test_transaction_rolls_back_on_business_error(monkeypatch):
 
 
 def test_contact_requires_valid_office_configuration(monkeypatch):
-    from python.fastapi.schemas import ContactCreate
     commerce = Commerce()
     monkeypatch.delenv('SUPPORT_HEAD_OFFICE_ID', raising=False)
-    with pytest.raises(HTTPException) as exc:
-        commerce.create_contact('member', ContactCreate(content='문의'))
-    assert exc.value.status_code == 503
+    monkeypatch.setattr(db, 'query', lambda *_: [{'id': 'HQ004'}])
+    assert commerce.support_head_office() == 'HQ004'
     monkeypatch.setenv('SUPPORT_HEAD_OFFICE_ID', 'invalid')
+    monkeypatch.setattr(db, 'query_one', lambda *_: None)
     with pytest.raises(HTTPException) as exc:
-        commerce.create_contact('member', ContactCreate(content='문의'))
+        commerce.support_head_office()
     assert exc.value.status_code == 503
 
 

@@ -217,6 +217,7 @@ class DiscoverApi {
     String? keyword,
     String? brand,
     String? gender,
+    String? purpose,
   }) async {
     final query = <String, String>{'limit': '100'};
     if (keyword != null && keyword.trim().isNotEmpty) {
@@ -224,6 +225,7 @@ class DiscoverApi {
     }
     if (brand != null) query['brand'] = brand;
     if (gender != null) query['gender'] = gender;
+    if (purpose != null) query['purpose'] = purpose;
     final data = await _getObject('/api/v1/discover/products', query);
     return (data['items'] as List)
         .map(
