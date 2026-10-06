@@ -2,6 +2,6 @@
 abstract final class ApiConfig {
   static const baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://192.168.45.123:8000',
+    defaultValue: 'http://192.168.20.68:8000',
   );
 }
