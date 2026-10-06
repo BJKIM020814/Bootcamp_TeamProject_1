@@ -1,5 +1,6 @@
 import 'package:bootcamp_teamproject_1/discover/discover_api.dart';
 import 'package:bootcamp_teamproject_1/common/fitpick_snackbar.dart';
+import 'package:bootcamp_teamproject_1/common/review_image_view.dart';
 import 'package:bootcamp_teamproject_1/order/cartController.dart';
 import 'package:bootcamp_teamproject_1/order/cartPage.dart';
 import 'package:bootcamp_teamproject_1/order/checkoutPage.dart';
@@ -11,9 +12,16 @@ import 'package:get/get.dart';
 
 /// 목업의 갤러리·옵션·상세 탭·하단 구매 바를 실제 DB 상품 데이터로 구성한다.
 class ProductDetailPage extends StatefulWidget {
-  const ProductDetailPage({super.key, required this.productCode});
+  const ProductDetailPage({
+    super.key,
+    required this.productCode,
+    this.cartItemId,
+  });
 
   final String productCode;
+
+  /// 값이 있으면 장바구니 옵션 편집 화면으로 동작하며 구매 주문을 만들지 않는다.
+  final int? cartItemId;
 
   @override
   State<ProductDetailPage> createState() => _ProductDetailPageState();
@@ -22,7 +30,8 @@ class ProductDetailPage extends StatefulWidget {
 class _ProductDetailPageState extends State<ProductDetailPage> {
   final DiscoverApi _api = DiscoverApi();
   late Future<DiscoverProduct> _productFuture;
-  Future<List<Map<String, dynamic>>>? _reviewsFuture;
+  Future<DiscoverReviewList>? _reviewsFuture;
+  int? _reviewCount;
   String? _selectedColor;
   int? _selectedSize;
   int _sectionIndex = 0;
@@ -117,6 +126,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             .where((variant) => color == null || variant.color == color)
             .map((variant) => variant.size)
             .whereType<int>()
+            .where((size) => size > 0)
             .toSet()
             .toList()
           ..sort();
@@ -125,9 +135,11 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         : (product.size != null && sizes.contains(product.size)
               ? product.size
               : (sizes.isEmpty ? null : sizes.first));
-    final selected = _matchingVariant(variants, color, size) ?? product;
-    final gallery = _galleryVariants(variants, color, selected);
-    _reviewsFuture ??= _api.reviews(widget.productCode);
+    final selected = _matchingVariant(variants, color, size);
+    final purchasable =
+        selected != null && size != null && sizes.contains(size);
+    final gallery = _galleryVariants(variants, color, selected ?? product);
+    _reviewsFuture ??= _fetchReviews();
 
     return Column(
       children: [
@@ -156,7 +168,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
               ),
               const SizedBox(height: 8),
               Text(
-                '₩${selected.price}',
+                '₩${selected?.price ?? product.price}',
                 style: const TextStyle(
                   fontSize: 19,
                   fontWeight: FontWeight.w900,
@@ -194,7 +206,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             ],
           ),
         ),
-        _buildPurchaseBar(selected, size != null),
+        _buildPurchaseBar(selected ?? product, purchasable),
       ],
     );
   }
@@ -204,17 +216,14 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     String? color,
     DiscoverProduct selected,
   ) {
-    final matching = variants.where(
-      (variant) => color == null || variant.color == color,
+    // 선택 조합과 같은 실제 상품 행의 이미지 하나를 사용해 색상 변경 즉시 사진도 바뀌게 한다.
+    final exact = variants.where(
+      (variant) =>
+          (color == null || variant.color == color) &&
+          variant.code == selected.code,
     );
-    final withImages = matching
-        .where((variant) => _api.imageUrl(variant) != null)
-        .toList();
-    if (withImages.isEmpty) return [selected];
-    final seen = <String>{};
-    return withImages
-        .where((variant) => seen.add(variant.imagePath ?? variant.code))
-        .toList();
+    final chosen = exact.isNotEmpty ? exact.first : selected;
+    return [_api.imageUrl(chosen) == null ? selected : chosen];
   }
 
   DiscoverProduct? _matchingVariant(
@@ -222,10 +231,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     String? color,
     int? size,
   ) {
+    if (size == null) return null;
     final matches = variants.where(
       (variant) =>
-          (color == null || variant.color == color) &&
-          (size == null || variant.size == size),
+          variant.size == size && (color == null || variant.color == color),
     );
     return matches.length == 1 ? matches.first : null;
   }
@@ -354,17 +363,17 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   Widget _buildSectionTabs() => Row(
     children: [
       _sectionTab('상품 정보', 0),
-      _sectionTab('구매 리뷰', 1),
+      _sectionTab(_reviewCount == null ? '구매 리뷰' : '구매 리뷰 ($_reviewCount)', 1),
       _sectionTab('교환 · 반품', 2),
     ],
   );
 
   Widget _sectionTab(String title, int index) => Expanded(
     child: InkWell(
-      onTap: () => setState(() {
-        _sectionIndex = index;
-        if (index == 1) _reviewsFuture ??= _api.reviews(widget.productCode);
-      }),
+      onTap: () {
+        setState(() => _sectionIndex = index);
+        if (index == 1) _reviewsFuture ??= _fetchReviews();
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
@@ -446,7 +455,22 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     ),
   );
 
-  Widget _reviewSection() => FutureBuilder<List<Map<String, dynamic>>>(
+  Future<DiscoverReviewList> _fetchReviews() async {
+    final result = await _api.reviews(widget.productCode);
+    if (mounted && _reviewCount != result.total) {
+      setState(() => _reviewCount = result.total);
+    }
+    return result;
+  }
+
+  void _reloadReviews() {
+    setState(() {
+      _reviewCount = null;
+      _reviewsFuture = _fetchReviews();
+    });
+  }
+
+  Widget _reviewSection() => FutureBuilder<DiscoverReviewList>(
     future: _reviewsFuture,
     builder: (context, snapshot) {
       if (snapshot.connectionState != ConnectionState.done) {
@@ -461,14 +485,14 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         return Center(
           child: TextButton(
             onPressed: () {
-              final nextReviews = _api.reviews(widget.productCode);
-              setState(() => _reviewsFuture = nextReviews);
+              _reloadReviews();
             },
             child: const Text('리뷰 다시 불러오기'),
           ),
         );
       }
-      final reviews = snapshot.data ?? const [];
+      final reviewList = snapshot.data;
+      final reviews = reviewList?.items ?? const <Map<String, dynamic>>[];
       if (reviews.isEmpty) return const Text('등록된 구매 리뷰가 없습니다.');
       final ratings = reviews
           .map((review) => num.tryParse('${review['rating']}') ?? 0)
@@ -490,31 +514,46 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
               ),
               const SizedBox(width: 8),
               Text(
-                '리뷰 ${reviews.length}개',
+                '리뷰 ${reviewList?.total ?? reviews.length}개',
                 style: const TextStyle(color: Color(0xFF777068)),
               ),
             ],
           ),
           const SizedBox(height: 12),
           for (final review in reviews) ...[
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: CircleAvatar(
-                backgroundColor: const Color(0xFFF3F1EE),
-                child: Text(
-                  '${review['rating'] ?? '-'}',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ReviewImageView(
+                    imageUrl: _api.imageUrlFromPath(
+                      review['image_url']?.toString(),
+                    ),
+                    height: 180,
                   ),
-                ),
-              ),
-              title: Text('${review['content'] ?? ''}'),
-              subtitle: Text(
-                '${review['fit'] ?? ''} · ${review['created_at'] ?? ''}',
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.star_rounded,
+                        color: Color(0xFFE1A63A),
+                        size: 19,
+                      ),
+                      const SizedBox(width: 4),
+                      Text('${review['rating'] ?? '-'}점'),
+                      const SizedBox(width: 10),
+                      Text(
+                        '${review['fit'] ?? ''} · ${review['created_at'] ?? ''}',
+                        style: const TextStyle(color: Color(0xFF777068)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text('${review['content'] ?? ''}'),
+                ],
               ),
             ),
-            const Divider(height: 1),
           ],
         ],
       );
@@ -544,40 +583,74 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         color: Colors.white,
         border: Border(top: BorderSide(color: Color(0xFFEDEAE6))),
       ),
-      child: Row(
-        children: [
-          IconButton(
-            tooltip: '장바구니에 담기',
-            onPressed: _busy || !hasSize
-                ? null
-                : () => _addToCart(selected, buyNow: false),
-            icon: const Icon(Icons.shopping_bag_outlined),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: FilledButton(
-              onPressed: _busy || !hasSize
-                  ? null
-                  : () => _addToCart(selected, buyNow: true),
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF272A2D),
-                foregroundColor: Colors.white,
-                minimumSize: const Size.fromHeight(48),
+      child: widget.cartItemId != null
+          ? SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: _busy || !hasSize
+                    ? null
+                    : () => _updateCartOption(selected),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF272A2D),
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size.fromHeight(48),
+                ),
+                child: Text(_busy ? '변경 중…' : '선택한 옵션으로 변경'),
               ),
-              child: Text(
-                _busy
-                    ? '처리 중…'
-                    : (hasSize
-                          ? '${_selectedSize ?? selected.size}mm 바로 구매'
-                          : '구매 옵션을 확인할 수 없습니다'),
-                style: const TextStyle(fontWeight: FontWeight.w800),
-              ),
+            )
+          : Row(
+              children: [
+                IconButton(
+                  tooltip: '장바구니에 담기',
+                  onPressed: _busy || !hasSize
+                      ? null
+                      : () => _addToCart(selected, buyNow: false),
+                  icon: const Icon(Icons.shopping_bag_outlined),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: _busy || !hasSize
+                        ? null
+                        : () => _addToCart(selected, buyNow: true),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF272A2D),
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size.fromHeight(48),
+                    ),
+                    child: Text(
+                      _busy
+                          ? '처리 중…'
+                          : (hasSize
+                                ? '${_selectedSize ?? selected.size}mm 바로 구매'
+                                : '구매 옵션을 확인할 수 없습니다'),
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
-      ),
     ),
   );
+
+  Future<void> _updateCartOption(DiscoverProduct product) async {
+    final cartItemId = widget.cartItemId;
+    if (cartItemId == null) return;
+    setState(() => _busy = true);
+    try {
+      final cart = CartController.to;
+      if (!await cart.updateProduct(cartItemId, product.code)) {
+        _showMessage(cart.errorMessage.value ?? '옵션 변경에 실패했습니다.');
+        return;
+      }
+      if (mounted) {
+        showFitpickSnackbar('색상과 사이즈를 변경했습니다.', title: '장바구니');
+        Get.back();
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
 
   /// 서버 장바구니에 선택 상품을 저장하고, 바로 구매면 해당 상품만 선택해 결제로 이동한다.
   Future<void> _addToCart(

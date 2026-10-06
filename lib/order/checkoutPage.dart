@@ -3,7 +3,8 @@ import 'package:bootcamp_teamproject_1/common/fitpick_snackbar.dart';
 import 'package:bootcamp_teamproject_1/order/cartPage.dart';
 import 'package:bootcamp_teamproject_1/order/orderApi.dart';
 import 'package:bootcamp_teamproject_1/order/orderCompletePage.dart';
-import 'package:bootcamp_teamproject_1/order/storePickerStub.dart';
+import 'package:bootcamp_teamproject_1/discover/discover_api.dart';
+import 'package:bootcamp_teamproject_1/discover/store_selection_page.dart';
 import 'package:bootcamp_teamproject_1/services/fitpick_api_service.dart';
 import 'package:bootcamp_teamproject_1/user/authController.dart';
 import 'package:flutter/material.dart';
@@ -27,6 +28,7 @@ class _CheckoutpageState extends State<Checkoutpage> {
   CheckoutData? _checkout;
   String? _loadError;
   bool _paying = false;
+  PickupStore? _selectedStore;
 
   int _paymentMethodIndex = 0;
   List<String> get _paymentMethods =>
@@ -160,6 +162,14 @@ class _CheckoutpageState extends State<Checkoutpage> {
     });
   }
 
+  /// 주문 생성 전에는 선택 대리점을 반복 변경할 수 있다.
+  Future<void> _choosePickupStore() async {
+    final store = await Navigator.of(context).push<PickupStore>(
+      MaterialPageRoute(builder: (_) => const StoreSelectionPage()),
+    );
+    if (store != null && mounted) setState(() => _selectedStore = store);
+  }
+
   void _showMessage(String message) {
     showFitpickSnackbar(message, title: '오류');
   }
@@ -167,25 +177,30 @@ class _CheckoutpageState extends State<Checkoutpage> {
   /// 서버에 주문을 만든다. 가격·할인은 서버가 다시 계산하고, 주문된 상품은 장바구니에서 빠진다.
   Future<void> _pay(List<CartItem> orderItems) async {
     if (!_agreed || orderItems.isEmpty || _paying) return;
-    if (!cartController.hasStore) {
-      _showMessage('수령 매장을 선택해 주세요.');
-      return;
-    }
     if (_ordererName.isEmpty || _ordererPhone.isEmpty) {
       _showMessage('주문자 이름과 연락처를 입력해 주세요.');
+      return;
+    }
+    if (_selectedStore == null) {
+      _showMessage('주문 전에 수령 대리점을 선택해 주세요.');
+      return;
+    }
+    final normalizedPhone = _ordererPhone.replaceAll(RegExp(r'[^0-9-]'), '');
+    if (normalizedPhone.length < 9 || normalizedPhone.length > 20) {
+      _showMessage('주문자 연락처를 숫자 또는 하이픈 형식으로 확인해 주세요.');
       return;
     }
     setState(() => _paying = true);
     try {
       final order = await OrderApi.createOrder(
-        ordererName: _ordererName,
-        ordererPhone: _ordererPhone,
+        ordererName: _ordererName.trim(),
+        ordererPhone: normalizedPhone,
         paymentMethod:
             _paymentMethods[_paymentMethodIndex < _paymentMethods.length
                 ? _paymentMethodIndex
                 : 0],
+        dealerSeq: _selectedStore!.id,
         couponId: _selectedCoupon?.couponId,
-        dealerSeq: cartController.storeSeq.value,
         agreed: _agreed,
       );
       await cartController.load();
@@ -312,10 +327,10 @@ class _CheckoutpageState extends State<Checkoutpage> {
             children: [
               _buildStepIndicator(),
               const SizedBox(height: 20),
-              _sectionTitle('1. 수령 매장'),
+              _sectionTitle('1. 수령 대리점'),
               const SizedBox(height: 8),
-              _buildStoreCard(),
-              const SizedBox(height: 10),
+              _buildSelectedStore(),
+              const SizedBox(height: 8),
               _buildPickupNotice(),
               const SizedBox(height: 24),
               _sectionTitle('2. 주문 상품'),
@@ -408,56 +423,6 @@ class _CheckoutpageState extends State<Checkoutpage> {
     );
   }
 
-  Widget _buildStoreCard() {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey.shade300),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.location_on_outlined, color: Colors.grey),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Obx(
-                  () => Text(
-                    cartController.storeName.value,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                Obx(
-                  () => Text(
-                    cartController.storeAddress.value,
-                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () => pickAndApplyStore(cartController),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.black,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            child: const Text('변경'),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildPickupNotice() {
     return Container(
       padding: const EdgeInsets.all(12),
@@ -476,9 +441,38 @@ class _CheckoutpageState extends State<Checkoutpage> {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              '상품은 본사에서 선택한 수령 매장으로 발송됩니다. 도착 후 수령 안내를 확인해 주세요.',
+              '주문 완료 후 본사에서 선택한 대리점으로 상품을 발송합니다. 주문이 생성되면 수령 대리점은 변경할 수 없습니다.',
               style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSelectedStore() {
+    final store = _selectedStore;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey.shade300),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.storefront_outlined),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              store == null
+                  ? '수령 대리점을 선택해 주세요'
+                  : '${store.name}\n${store.address}',
+              style: const TextStyle(fontSize: 13, height: 1.5),
+            ),
+          ),
+          TextButton(
+            onPressed: _paying ? null : _choosePickupStore,
+            child: Text(store == null ? '선택' : '변경'),
           ),
         ],
       ),

@@ -48,6 +48,7 @@ class Commerce:
         # MySQL 컬럼명을 프론트에서 쓰는 camelCase 응답 필드로 변환하는 공통 SELECT 목록이다.
         return ('r.review_seq AS id,r.product_p_code AS productCode,r.context AS content,'
                 'r.rating,r.r_fit AS fit,r.r_date AS createdAt,r.likecount AS likeCount,'
+                "CASE WHEN OCTET_LENGTH(r.image)>=16 THEN CONCAT('/api/v1/discover/reviews/',r.review_seq,'/image') ELSE NULL END AS imageUrl,"
                 'p.p_name AS productName,p.b_name AS brand')
 
     def reviews(self, email, limit, offset):
@@ -71,7 +72,7 @@ class Commerce:
         # 현재 purchase의 p_code는 python/user_data.py와 동일한 상품 연결 키.
         # EXISTS로 구매 여부를 확인하므로 동일 상품을 여러 번 구매해도 목록에 중복되지 않는다.
         predicate = ('FROM product p WHERE EXISTS (SELECT 1 FROM purchase pu '
-                     'WHERE pu.customer_customer_id=%s AND pu.p_code=p.p_code) '
+                     "WHERE pu.customer_customer_id=%s AND pu.p_code=p.p_code AND pu.order_status='PICKED_UP') "
                      'AND NOT EXISTS (SELECT 1 FROM review r WHERE r.customer_customer_id=%s AND r.product_p_code=p.p_code)')
         rows = db.query('SELECT p.p_code AS productCode,p.p_name AS productName,p.b_name AS brand '
                         + predicate + ' ORDER BY p.p_code LIMIT %s OFFSET %s', (email, email, limit, offset))
@@ -85,7 +86,8 @@ class Commerce:
             cur.execute('SELECT customer_id FROM customer WHERE customer_id=%s FOR UPDATE', (email,))
             if not cur.fetchone():
                 raise HTTPException(409, '먼저 POST /api/signup/sync로 쇼핑 회원정보를 연결해 주세요.')
-            cur.execute('SELECT 1 FROM purchase WHERE customer_customer_id=%s AND p_code=%s LIMIT 1',
+            cur.execute("SELECT 1 FROM purchase WHERE customer_customer_id=%s AND p_code=%s "
+                        "AND order_status='PICKED_UP' LIMIT 1",
                         (email, data.productCode))
             if not cur.fetchone():
                 raise HTTPException(403, '구매한 상품만 리뷰를 작성할 수 있습니다.')
@@ -116,24 +118,25 @@ class Commerce:
             raise HTTPException(404, '리뷰를 찾을 수 없습니다.')
 
     def contacts(self, email, limit, offset):
-        # 다건 문의와 inquiry_message 대화 스레드를 회원 소유 조건으로 조회한다.
-        rows = db.query('SELECT inquiry_id AS id,customer_id,head_office_id,COALESCE(legacy_c_seq,inquiry_id) AS c_seq,'
-                        'content,created_at AS createdAt,response,responded_at AS respondedAt,process '
-                        'FROM customer_support_inquiry WHERE customer_id=%s '
-                        'ORDER BY created_at DESC,inquiry_id DESC LIMIT %s OFFSET %s',
-                        (email, limit, offset))
-        total = db.query_one('SELECT COUNT(*) AS total FROM customer_support_inquiry WHERE customer_id=%s',
-                             (email,))['total']
+        # 초기 ERD의 contact가 문의와 대화의 유일한 원본이다. root만 목록에 표시한다.
+        rows = db.query('SELECT c_seq AS id,customer_customer_id AS customer_id,head_office_id,c_seq,'
+                        'contact_post AS content,c_date AS createdAt,c_answer AS response,'
+                        'IF(c_status=1,c_answerdate,NULL) AS respondedAt,c_status AS process '
+                        'FROM contact WHERE customer_customer_id=%s AND thread_root_seq=c_seq '
+                        'ORDER BY c_date DESC,c_seq DESC LIMIT %s OFFSET %s', (email, limit, offset))
+        total = db.query_one('SELECT COUNT(*) AS total FROM contact '
+                             'WHERE customer_customer_id=%s AND thread_root_seq=c_seq', (email,))['total']
         for row in rows:
             row['messages'] = self.inquiry_messages(row)
         return {'items': rows, 'total': total, 'limit': limit, 'offset': offset}
 
     def contact(self, email, contact_id):
         # 문의 전체 대화와 마지막 답변 요약을 회원 소유 조건으로 가져온다.
-        row = db.query_one('SELECT inquiry_id AS id,customer_id,head_office_id,'
-                           'COALESCE(legacy_c_seq,inquiry_id) AS c_seq,content,created_at AS createdAt,response,'
-                           'responded_at AS respondedAt,process FROM customer_support_inquiry '
-                           'WHERE customer_id=%s AND inquiry_id=%s', (email, contact_id))
+        row = db.query_one('SELECT c_seq AS id,customer_customer_id AS customer_id,head_office_id,c_seq,'
+                           'contact_post AS content,c_date AS createdAt,c_answer AS response,'
+                           'IF(c_status=1,c_answerdate,NULL) AS respondedAt,c_status AS process '
+                           'FROM contact WHERE customer_customer_id=%s AND thread_root_seq=c_seq AND c_seq=%s',
+                           (email, contact_id))
         if not row:
             raise HTTPException(404, '문의를 찾을 수 없습니다.')
         row['messages'] = self.inquiry_messages(row)
@@ -141,97 +144,73 @@ class Commerce:
 
     @staticmethod
     def inquiry_messages(inquiry):
-        """메시지가 아직 이전 단건 답변 형식인 문의도 읽기 시 대화 형태로 호환한다."""
-        messages = db.query(
-            'SELECT message_id AS id,author_role AS authorRole,author_id AS authorId,content,'
-            'created_at AS createdAt,turn_index AS turnIndex FROM inquiry_message '
-            'WHERE customer_id=%s AND head_office_id=%s AND c_seq=%s ORDER BY turn_index,message_id',
-            (inquiry['customer_id'], inquiry['head_office_id'], inquiry['c_seq']))
-        if messages:
-            return messages
-        # 이전 문의는 원문/마지막 답변을 가상 메시지로 보여 주며 조회만으로 DB를 수정하지 않는다.
-        result = [{'id': None, 'authorRole': 'customer', 'authorId': inquiry['customer_id'],
-                   'content': inquiry['content'], 'createdAt': inquiry['createdAt'], 'turnIndex': 0}]
-        response = inquiry.get('response')
-        if response:
-            result.append({'id': None, 'authorRole': 'employee', 'authorId': inquiry['head_office_id'],
-                           'content': response, 'createdAt': inquiry.get('respondedAt') or inquiry['createdAt'],
-                           'turnIndex': 1})
-        return result
+        """초기 문의행과 그 뒤에 추가된 contact 메시지행을 순서대로 반환한다."""
+        rows = db.query('SELECT c_seq AS id,author_role AS authorRole,author_id AS authorId,'
+                        'contact_post AS content,c_date AS createdAt,c_seq '
+                        'FROM contact WHERE customer_customer_id=%s AND head_office_id=%s '
+                        'AND thread_root_seq=%s ORDER BY c_seq',
+                        (inquiry['customer_id'], inquiry['head_office_id'], inquiry['c_seq']))
+        messages = []
+        for index, row in enumerate(rows):
+            messages.append({key: row[key] for key in ('id', 'authorRole', 'authorId', 'content', 'createdAt')} |
+                            {'turnIndex': index})
+        # 구형 단건 답변은 기존 행의 c_answer로만 저장되어 있을 수 있다.
+        if inquiry.get('response') and not any(row['authorRole'] == 'employee' for row in messages):
+            messages.append({'id': None, 'authorRole': 'employee', 'authorId': inquiry['head_office_id'],
+                             'content': inquiry['response'],
+                             'createdAt': inquiry.get('respondedAt') or inquiry['createdAt'],
+                             'turnIndex': len(messages)})
+        return messages
 
     def append_customer_message(self, email, inquiry_id, content):
         """회원 후속 메시지를 직전 메시지에 연결하고 답변 대기 상태로 되돌린다."""
         with self.transaction() as cur:
-            cur.execute('SELECT * FROM customer_support_inquiry WHERE customer_id=%s AND inquiry_id=%s FOR UPDATE',
-                        (email, inquiry_id))
+            cur.execute('SELECT * FROM contact WHERE customer_customer_id=%s AND c_seq=%s '
+                        'AND thread_root_seq=c_seq FOR UPDATE', (email, inquiry_id))
             inquiry = cur.fetchone()
             if not inquiry:
                 raise HTTPException(404, '문의를 찾을 수 없습니다.')
-            seq = inquiry.get('legacy_c_seq') or inquiry['inquiry_id']
-            last = self._last_inquiry_message(cur, inquiry, seq)
-            if last is None:
-                cur.execute('INSERT INTO inquiry_message '
-                            '(customer_id,head_office_id,c_seq,turn_index,parent_message_id,author_role,author_id,content) '
-                            'VALUES (%s,%s,%s,0,NULL,\'customer\',%s,%s)',
-                            (email, inquiry['head_office_id'], seq, email, inquiry['content']))
-                last = {'message_id': cur.lastrowid, 'turn_index': 0}
-            cur.execute('INSERT INTO inquiry_message '
-                        '(customer_id,head_office_id,c_seq,turn_index,parent_message_id,author_role,author_id,content) '
-                        'VALUES (%s,%s,%s,%s,%s,\'customer\',%s,%s)',
-                        (email, inquiry['head_office_id'], seq, last['turn_index'] + 1,
-                         last['message_id'], email, content))
+            cur.execute('SELECT c_seq FROM contact WHERE thread_root_seq=%s '
+                        'ORDER BY c_seq DESC LIMIT 1 FOR UPDATE', (inquiry['c_seq'],))
+            last = cur.fetchone()
+            cur.execute('SELECT COUNT(*) AS n FROM contact WHERE thread_root_seq=%s', (inquiry['c_seq'],))
+            turn_index = cur.fetchone()['n']
+            cur.execute('INSERT INTO contact '
+                        '(customer_customer_id,head_office_id,thread_root_seq,parent_c_seq,author_role,author_id,'
+                        'contact_post,c_date,c_answer,c_answerdate,c_status,comment_seq,level) '
+                        'VALUES (%s,%s,%s,%s,\'customer\',%s,%s,UTC_TIMESTAMP(),\'\',UTC_TIMESTAMP(),0,0,0)',
+                        (email, inquiry['head_office_id'], inquiry['c_seq'], last['c_seq'], email, content))
             message_id = cur.lastrowid
-            cur.execute('UPDATE customer_support_inquiry SET process=0 WHERE inquiry_id=%s',
-                        (inquiry['inquiry_id'],))
-            if inquiry.get('legacy_c_seq') is not None:
-                cur.execute('UPDATE contact SET c_status=0 WHERE customer_customer_id=%s '
-                            'AND head_office_id=%s AND c_seq=%s',
-                            (email, inquiry['head_office_id'], seq))
-        return db.query_one('SELECT message_id AS id,author_role AS authorRole,author_id AS authorId,content,'
-                            'created_at AS createdAt,turn_index AS turnIndex FROM inquiry_message WHERE message_id=%s',
-                            (message_id,))
-
-    @staticmethod
-    def _last_inquiry_message(cur, inquiry, seq):
-        cur.execute('SELECT message_id,turn_index FROM inquiry_message WHERE customer_id=%s '
-                    'AND head_office_id=%s AND c_seq=%s ORDER BY turn_index DESC,message_id DESC LIMIT 1 FOR UPDATE',
-                    (inquiry['customer_id'], inquiry['head_office_id'], seq))
-        return cur.fetchone()
+            cur.execute('UPDATE contact SET c_status=0 WHERE c_seq=%s', (inquiry['c_seq'],))
+        return db.query_one('SELECT c_seq AS id,author_role AS authorRole,author_id AS authorId,'
+                            'contact_post AS content,c_date AS createdAt,%s AS turnIndex '
+                            'FROM contact WHERE c_seq=%s', (turn_index, message_id))
 
     def reply_to_inquiry(self, customer_id, head_office_id, c_seq, answer, employee_id):
-        """본사 답변을 대화 끝에 추가하고 구형 contact의 마지막 답변 필드도 동기화한다."""
+        """본사 답변을 contact 대화행으로 추가하고 root 문의의 답변 요약도 갱신한다."""
         with self.transaction() as cur:
-            cur.execute(
-                'SELECT * FROM customer_support_inquiry WHERE customer_id=%s AND head_office_id=%s '
-                'AND ((legacy_c_seq=%s AND legacy_c_seq IS NOT NULL) '
-                'OR (inquiry_id=%s AND legacy_c_seq IS NULL)) FOR UPDATE',
-                (customer_id, head_office_id, c_seq, c_seq))
+            cur.execute('SELECT * FROM contact WHERE customer_customer_id=%s AND head_office_id=%s '
+                        'AND c_seq=%s AND thread_root_seq=c_seq FOR UPDATE',
+                        (customer_id, head_office_id, c_seq))
             inquiry = cur.fetchone()
             if not inquiry:
                 raise HTTPException(404, '문의를 찾을 수 없습니다.')
-            seq = inquiry.get('legacy_c_seq') or inquiry['inquiry_id']
-            last = self._last_inquiry_message(cur, inquiry, seq)
-            if last is None:
-                cur.execute('INSERT INTO inquiry_message '
-                            '(customer_id,head_office_id,c_seq,turn_index,parent_message_id,author_role,author_id,content) '
-                            'VALUES (%s,%s,%s,0,NULL,\'customer\',%s,%s)',
-                            (customer_id, head_office_id, seq, customer_id, inquiry['content']))
-                last = {'message_id': cur.lastrowid, 'turn_index': 0}
-            cur.execute('INSERT INTO inquiry_message '
-                        '(customer_id,head_office_id,c_seq,turn_index,parent_message_id,author_role,author_id,content) '
-                        'VALUES (%s,%s,%s,%s,%s,\'employee\',%s,%s)',
-                        (customer_id, head_office_id, seq, last['turn_index'] + 1,
-                         last['message_id'], employee_id, answer))
+            cur.execute('SELECT c_seq FROM contact WHERE thread_root_seq=%s '
+                        'ORDER BY c_seq DESC LIMIT 1 FOR UPDATE', (c_seq,))
+            last = cur.fetchone()
+            cur.execute('SELECT COUNT(*) AS n FROM contact WHERE thread_root_seq=%s', (c_seq,))
+            turn_index = cur.fetchone()['n']
+            cur.execute('INSERT INTO contact '
+                        '(customer_customer_id,head_office_id,thread_root_seq,parent_c_seq,author_role,author_id,'
+                        'contact_post,c_date,c_answer,c_answerdate,c_status,comment_seq,level) '
+                        'VALUES (%s,%s,%s,%s,\'employee\',%s,%s,UTC_TIMESTAMP(),\'\',UTC_TIMESTAMP(),1,0,0)',
+                        (customer_id, head_office_id, c_seq, last['c_seq'], employee_id, answer))
             message_id = cur.lastrowid
-            cur.execute('UPDATE customer_support_inquiry SET response=%s,responded_at=UTC_TIMESTAMP(),process=1 '
-                        'WHERE inquiry_id=%s', (answer, inquiry['inquiry_id']))
-            if inquiry.get('legacy_c_seq') is not None:
-                cur.execute('UPDATE contact SET c_answer=%s,c_answerdate=UTC_TIMESTAMP(),c_status=1 '
-                            'WHERE customer_customer_id=%s AND head_office_id=%s AND c_seq=%s',
-                            (answer, customer_id, head_office_id, seq))
-        return db.query_one('SELECT message_id AS id,author_role AS authorRole,author_id AS authorId,content,'
-                            'created_at AS createdAt,turn_index AS turnIndex FROM inquiry_message WHERE message_id=%s',
-                            (message_id,))
+            cur.execute('UPDATE contact SET c_answer=%s,c_answerdate=UTC_TIMESTAMP(),c_status=1 '
+                        'WHERE c_seq=%s', (answer, c_seq))
+        return db.query_one('SELECT c_seq AS id,author_role AS authorRole,author_id AS authorId,'
+                            'contact_post AS content,c_date AS createdAt,%s AS turnIndex '
+                            'FROM contact WHERE c_seq=%s', (turn_index, message_id))
 
     @staticmethod
     def support_head_office():
@@ -254,14 +233,13 @@ class Commerce:
             cur.execute('SELECT 1 FROM customer WHERE customer_id=%s', (email,))
             if not cur.fetchone():
                 raise HTTPException(409, '먼저 POST /api/signup/sync로 쇼핑 회원정보를 연결해 주세요.')
-            cur.execute('INSERT INTO customer_support_inquiry '
-                        '(customer_id,head_office_id,content,created_at,process) '
-                        'VALUES (%s,%s,%s,UTC_TIMESTAMP(),0)', (email, office_id, data.content))
+            cur.execute('INSERT INTO contact '
+                        '(customer_customer_id,head_office_id,thread_root_seq,parent_c_seq,author_role,author_id,'
+                        'contact_post,c_date,c_answer,c_answerdate,c_status,comment_seq,level) '
+                        'VALUES (%s,%s,NULL,NULL,\'customer\',%s,%s,UTC_TIMESTAMP(),\'\',UTC_TIMESTAMP(),0,0,0)',
+                        (email, office_id, email, data.content))
             contact_id = cur.lastrowid
-            cur.execute('INSERT INTO inquiry_message '
-                        '(customer_id,head_office_id,c_seq,turn_index,parent_message_id,author_role,author_id,content) '
-                        'VALUES (%s,%s,%s,0,NULL,\'customer\',%s,%s)',
-                        (email, office_id, contact_id, email, data.content))
+            cur.execute('UPDATE contact SET thread_root_seq=c_seq WHERE c_seq=%s', (contact_id,))
         return self.contact(email, contact_id)
 
 

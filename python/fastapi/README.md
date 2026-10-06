@@ -32,12 +32,15 @@ Firebase의 직원 password, 재고/등록/수주/발주 데이터는 이 회원
 
 ### 주문/모의 결제 저장 구조
 
-- 기준 주문과 주문상품은 기존 MySQL `purchase_order` / `purchase_order_item`에 저장한다.
-- `purchase_order_detail`은 원본 주문 테이블에 없는 주문자·매장·결제수단·쿠폰·수령 QR 정보를 보완한다.
-- 교환/반품은 `order_claim` / `order_claim_photo`에서 `purchase_order_item.order_item_id`를 참조한다.
-- 고객센터 대화는 `inquiry_message`의 `parent_message_id` 체인으로 이어진다. 본사는 `PATCH /api/v1/headquarters/inquiries/answer?customer_id=...&head_office_id=...&c_seq=...`에 `{ "answer": "..." }`를 보내고, 회원은 `POST /api/support/contacts/{id}/messages`에 `{ "content": "..." }`를 보내 후속 메시지를 남긴다.
+- 초기 ERD의 `purchase`가 주문/상품행 원본이다. 여러 상품 행은 `order_code`로 묶고 `purchase_id`가 각 행을 식별한다.
+- 주문자·매장·결제수단·쿠폰·수령 QR·상태 정보는 기존 `purchase`에 추가한 컬럼에 저장한다.
+- 교환/반품 보조 테이블 `order_claim` / `order_claim_photo`는 `purchase.purchase_id`를 참조한다.
+- 초기 ERD의 `contact`가 문의·후속 메시지 원본이다. `thread_root_seq`와 `parent_c_seq`가 대화를 연결하며 별도 문의 테이블은 쓰지 않는다.
+- 본사 답변 경로는 `PATCH /api/v1/headquarters/inquiries/answer?customer_id=...&head_office_id=...&c_seq=...`; 회원 후속 메시지는 `POST /api/support/contacts/{id}/messages`다.
+- 기존 `purchase_order*`, `customer_support_inquiry`, `inquiry_message`는 전환 검증이 끝날 때까지 보존하지만 새 코드 경로에서는 사용하지 않는다.
 - SQLite `cart_items`는 모의 결제 주문 커밋이 성공한 뒤 선택된 항목만 비운다.
-- DB 관리자가 `python -m python.fastapi.order.init_tables`를 실행해 `order/schema.sql`의 추가 테이블을 설치해야 한다. 기존 테이블/행은 삭제하지 않는다.
+- DB 관리자는 백업 후 `python/fastapi/sql/restore_legacy_commerce_schema.sql`을 한 번 적용해야 한다. 원본 행은 보존하며 기존 중간 주문 행을 `purchase`에 이관한다.
+- 교환/반품 보조 테이블이 없다면 `order/schema.sql`을 실행한다. 주문/문의 원본 테이블은 생성하지 않는다.
 - 주문 본사는 `ORDER_HEAD_OFFICE_ID`가 등록된 값이면 우선 사용하고, 미설정이면 `head_office.division='물류본부'`인 행이 정확히 하나일 때 이를 선택한다.
 
 ## 실행
@@ -62,8 +65,8 @@ uvicorn python.fastapi.main:app --reload --host 0.0.0.0 --port 8000
 - Python SDK 인증은 Google ADC 또는 `GOOGLE_APPLICATION_CREDENTIALS` 필요.
   Firebase CLI 로그인만으로 Python 서버가 인증되지는 않는다.
 - 서비스 계정 JSON은 저장소 밖에 둔다.
-- 고객센터 문의는 레거시 `contact`를 보존하고 별도 테이블을 사용한다. 필요 시 `SUPPORT_HEAD_OFFICE_ID`에 실제 `head_office.id`를 설정하며, 미설정 시 유일한 고객지원본부(HQ004)를 사용한다.
-- 문의 테이블은 `python/fastapi/sql/support_inquiry.sql`을 설치한다. 문의 API가 마이페이지 앱과 본사 문의 목록에서 같은 행을 읽는다.
+- 고객센터 문의는 초기 `contact`에 저장한다. 필요 시 `SUPPORT_HEAD_OFFICE_ID`에 실제 `head_office.id`를 설정하며, 미설정 시 유일한 고객지원본부를 사용한다.
+- `python/fastapi/sql/support_inquiry.sql`은 폐기 안내 파일이며 실행하지 않는다. 원본 `contact` 확장은 `restore_legacy_commerce_schema.sql`이 담당한다.
 - MySQL 자동 마이그레이션은 하지 않는다. [스키마 확인 안내](sql/README.md) 참고.
 - `API_SQLITE_PATH`는 기본 `python/fastapi/data/app.sqlite3`. 재시작/배포 시 이 파일을 보존해야 한다.
   여러 서버 인스턴스에서는 공유 DB로 교체해야 세션/설정/알림이 공유된다.

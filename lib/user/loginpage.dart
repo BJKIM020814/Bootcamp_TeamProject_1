@@ -100,139 +100,164 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   void _goBack() {
-    if (Navigator.of(context).canPop()) Navigator.of(context).pop();
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    } else {
+      _continueBrowsing();
+    }
+  }
+
+  /// 탭바에서 열린 로그인 화면처럼 뒤로 갈 화면이 없으면 홈으로 돌아갑니다.
+  void _continueBrowsing() {
+    Navigator.of(context).pushAndRemoveUntil<void>(
+      MaterialPageRoute<void>(builder: (_) => const HomePage()),
+      (_) => false,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      resizeToAvoidBottomInset: true,
-      appBar: AppBar(
+    return PopScope(
+      canPop: Navigator.of(context).canPop(),
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _continueBrowsing();
+      },
+      child: Scaffold(
         backgroundColor: Colors.white,
-        foregroundColor: _brandColor,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        centerTitle: true,
-        title: const Text(
-          '로그인',
-          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
-        ),
-        leading: IconButton(
-          tooltip: '뒤로가기',
-          onPressed: _goBack,
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-        ),
-        actions: [
-          IconButton(
-            tooltip: '장바구니',
-            onPressed: () {},
-            icon: const Icon(Icons.shopping_bag_outlined, size: 23),
+        resizeToAvoidBottomInset: true,
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          foregroundColor: _brandColor,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          centerTitle: true,
+          title: const Text(
+            '로그인',
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
           ),
-        ],
-        bottom: const PreferredSize(
-          preferredSize: Size.fromHeight(1),
-          child: Divider(height: 1, color: Color(0xFFEEEEEE)),
+          leading: IconButton(
+            tooltip: '뒤로가기',
+            onPressed: _goBack,
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+          ),
+          actions: [
+            IconButton(
+              tooltip: '장바구니',
+              onPressed: () {},
+              icon: const Icon(Icons.shopping_bag_outlined, size: 23),
+            ),
+          ],
+          bottom: const PreferredSize(
+            preferredSize: Size.fromHeight(1),
+            child: Divider(height: 1, color: Color(0xFFEEEEEE)),
+          ),
         ),
-      ),
-      body: SafeArea(
-        top: false,
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(24, 32, 24, 36),
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            children: [
-              const _LoginBrandHeader(),
-              const SizedBox(height: 34),
-              const Text(
-                '다시 만나 반가워요',
-                style: TextStyle(
-                  color: _brandColor,
-                  fontSize: 25,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.7,
-                ),
-              ),
-              const SizedBox(height: 28),
-              _LoginInputField(
-                label: '이메일',
-                controller: _emailController,
-                keyboardType: TextInputType.emailAddress,
-                textInputAction: TextInputAction.next,
-                validator: (value) {
-                  final email = value?.trim() ?? '';
-                  return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)
-                      ? null
-                      : '올바른 이메일 주소를 입력해 주세요.';
-                },
-              ),
-              const SizedBox(height: 16),
-              _LoginInputField(
-                label: '비밀번호',
-                controller: _passwordController,
-                obscureText: _obscurePassword,
-                textInputAction: TextInputAction.done,
-                onSubmitted: (_) => _login(),
-                suffixIcon: IconButton(
-                  tooltip: _obscurePassword ? '비밀번호 표시' : '비밀번호 숨기기',
-                  onPressed: () =>
-                      setState(() => _obscurePassword = !_obscurePassword),
-                  icon: Icon(
-                    _obscurePassword
-                        ? Icons.visibility_outlined
-                        : Icons.visibility_off_outlined,
+        body: SafeArea(
+          top: false,
+          child: Form(
+            key: _formKey,
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(24, 32, 24, 36),
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              children: [
+                const _LoginBrandHeader(),
+                const SizedBox(height: 34),
+                const Text(
+                  '다시 만나 반가워요',
+                  style: TextStyle(
+                    color: _brandColor,
+                    fontSize: 25,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.7,
                   ),
                 ),
-                validator: (value) =>
-                    (value?.isNotEmpty ?? false) ? null : '비밀번호를 입력해 주세요.',
-              ),
-              const SizedBox(height: 28),
-              SizedBox(
-                height: 52,
-                child: FilledButton(
-                  onPressed: _isLoading ? null : _login,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: _brandColor,
-                    disabledBackgroundColor: const Color(0xFF777777),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
+                const SizedBox(height: 28),
+                _LoginInputField(
+                  label: '이메일',
+                  controller: _emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  textInputAction: TextInputAction.next,
+                  validator: (value) {
+                    final email = value?.trim() ?? '';
+                    return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)
+                        ? null
+                        : '올바른 이메일 주소를 입력해 주세요.';
+                  },
+                ),
+                const SizedBox(height: 16),
+                _LoginInputField(
+                  label: '비밀번호',
+                  controller: _passwordController,
+                  obscureText: _obscurePassword,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _login(),
+                  suffixIcon: IconButton(
+                    tooltip: _obscurePassword ? '비밀번호 표시' : '비밀번호 숨기기',
+                    onPressed: () =>
+                        setState(() => _obscurePassword = !_obscurePassword),
+                    icon: Icon(
+                      _obscurePassword
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
                     ),
                   ),
-                  child: _isLoading
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
+                  validator: (value) =>
+                      (value?.isNotEmpty ?? false) ? null : '비밀번호를 입력해 주세요.',
+                ),
+                const SizedBox(height: 28),
+                SizedBox(
+                  height: 52,
+                  child: FilledButton(
+                    onPressed: _isLoading ? null : _login,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: _brandColor,
+                      disabledBackgroundColor: const Color(0xFF777777),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: _isLoading
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text(
+                            '로그인',
+                            style: TextStyle(fontWeight: FontWeight.w700),
                           ),
-                        )
-                      : const Text(
-                          '로그인',
-                          style: TextStyle(fontWeight: FontWeight.w700),
-                        ),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 52,
-                child: OutlinedButton(
-                  onPressed: _isLoading ? null : _goToSignUp,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: _brandColor,
-                    side: const BorderSide(color: Color(0xFFD9D9D9)),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 52,
+                  child: OutlinedButton(
+                    onPressed: _isLoading ? null : _goToSignUp,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _brandColor,
+                      side: const BorderSide(color: Color(0xFFD9D9D9)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: const Text(
+                      '회원가입',
+                      style: TextStyle(fontWeight: FontWeight.w700),
                     ),
                   ),
-                  child: const Text(
-                    '회원가입',
-                    style: TextStyle(fontWeight: FontWeight.w700),
-                  ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 10),
+                TextButton.icon(
+                  onPressed: _isLoading ? null : _continueBrowsing,
+                  icon: const Icon(Icons.explore_outlined, size: 18),
+                  label: const Text('로그인 없이 둘러보기'),
+                  style: TextButton.styleFrom(foregroundColor: _brandColor),
+                ),
+              ],
+            ),
           ),
         ),
       ),

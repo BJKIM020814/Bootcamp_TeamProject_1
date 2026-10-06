@@ -14,6 +14,12 @@ from python import db
 PAYMENT_METHODS = ["신용 / 체크카드", "카카오페이", "네이버페이"]
 SHOE_SIZES = range(220, 311, 5)
 RECENT_LIMIT = 30  # 최근 본 상품 보관 개수
+# Discover 목록과 동일하게, 정상 이미지가 등록되어 실제 노출되는 상품 모델만 사용한다.
+_VALID_DISCOVER_IMAGE = "(OCTET_LENGTH({alias}.p_image) >= 1024 AND ("
+_VALID_DISCOVER_IMAGE += "LEFT({alias}.p_image,3)=0xFFD8FF OR "
+_VALID_DISCOVER_IMAGE += "LEFT({alias}.p_image,8)=0x89504E470D0A1A0A OR "
+_VALID_DISCOVER_IMAGE += "(LEFT({alias}.p_image,4)=0x52494646 AND "
+_VALID_DISCOVER_IMAGE += "SUBSTRING({alias}.p_image,9,4)=0x57454250)))"
 
 # 누적결제금액 기준 등급 (하한, 등급명). 아래에서 위로 갈수록 높은 등급.
 _GRADES = [(0, "브론즈"), (300_000, "실버"), (1_000_000, "골드"), (3_000_000, "VIP")]
@@ -119,7 +125,7 @@ def get_summary(customer_id):
         "shoe_size": profile["shoe_size"],
         "grade": profile["grade"],
         "favorite_store": profile["favorite_store"],
-        "order_count": count("SELECT COUNT(*) AS n FROM purchase WHERE customer_customer_id = %s"),
+        "order_count": count("SELECT COUNT(DISTINCT order_code) AS n FROM purchase WHERE customer_customer_id = %s"),
         "wishlist_count": count("SELECT COUNT(*) AS n FROM wishlist WHERE customer_id = %s"),
         "review_count": count("SELECT COUNT(*) AS n FROM review WHERE customer_customer_id = %s"),
     }
@@ -170,19 +176,42 @@ def remove_wishlist(customer_id, p_code):
 def get_recently_viewed(customer_id):
     ensure_customer(customer_id)
     rows = db.query(
-        "SELECT p.p_code, p.p_name, p.b_name, p.p_price, p.p_gender, (w.p_code IS NOT NULL) AS liked "
-        "FROM recently_viewed r JOIN product p ON p.p_code = r.p_code "
-        "LEFT JOIN wishlist w ON w.customer_id = r.customer_id AND w.p_code = r.p_code "
-        "WHERE r.customer_id = %s ORDER BY r.viewed_at DESC LIMIT %s",
-        (customer_id, RECENT_LIMIT),
+        "SELECT shown.p_code, shown.p_name, shown.b_name, shown.p_price, shown.p_gender, "
+        "(w.p_code IS NOT NULL) AS liked FROM ("
+        "SELECT visible.p_code, visible.p_name, visible.b_name, visible.p_price, "
+        "visible.p_gender, MAX(r.viewed_at) AS viewed_at "
+        "FROM recently_viewed r JOIN product source ON source.p_code = r.p_code "
+        "JOIN (SELECT MIN(p_code) AS p_code, p_name, b_name, p_gender FROM product p "
+        f"WHERE {_VALID_DISCOVER_IMAGE.format(alias='p')} "
+        "GROUP BY p_name, b_name, p_gender) models "
+        "ON models.p_name = source.p_name AND models.b_name = source.b_name "
+        "AND models.p_gender = source.p_gender "
+        "JOIN product visible ON visible.p_code = models.p_code "
+        "WHERE r.customer_id = %s "
+        "GROUP BY visible.p_code, visible.p_name, visible.b_name, visible.p_price, visible.p_gender"
+        ") shown LEFT JOIN wishlist w ON w.customer_id = %s AND w.p_code = shown.p_code "
+        "ORDER BY shown.viewed_at DESC LIMIT %s",
+        (customer_id, customer_id, RECENT_LIMIT),
     )
     return [_product_row(r) for r in rows]
 
 
 def record_view(customer_id, p_code):
-    """상품 상세를 열 때 호출. 이미 본 상품이면 시각만 갱신하고, 오래된 기록은 정리한다."""
+    """노출 가능한 상품 모델의 대표 상품코드를 기록하고 오래된 기록은 정리한다."""
     ensure_customer(customer_id)
-    _require_product(p_code)
+    valid = _VALID_DISCOVER_IMAGE.format(alias='p1')
+    variant = _VALID_DISCOVER_IMAGE.format(alias='p2')
+    visible = db.query_one(
+        "SELECT MIN(p2.p_code) AS p_code FROM product p1 "
+        "JOIN product p2 ON p2.p_name = p1.p_name AND p2.b_name = p1.b_name "
+        "AND p2.p_gender = p1.p_gender AND " + variant +
+        " WHERE p1.p_code = %s AND " + valid +
+        " GROUP BY p1.p_name, p1.b_name, p1.p_gender",
+        (p_code,),
+    )
+    if visible is None or visible["p_code"] is None:
+        raise MyPageError("Discover에 노출되지 않는 상품은 최근 본 상품에 기록할 수 없습니다.", 404)
+    p_code = visible["p_code"]
     db.execute(
         "INSERT INTO recently_viewed (customer_id, p_code) VALUES (%s, %s) "
         "ON DUPLICATE KEY UPDATE viewed_at = NOW()",

@@ -91,14 +91,11 @@ def api(tmp_path, monkeypatch):
     # 기존 메모리 API 계약 테스트에서는 호환 스키마를 제공한다. 스키마 차단은 별도 회귀 테스트한다.
     def schema_columns(sql, params=None):
         assert 'information_schema.COLUMNS' in sql
-        if params == ('inquiry_message',):
-            fields = ('message_id', 'customer_id', 'head_office_id', 'c_seq', 'turn_index',
-                      'parent_message_id', 'author_role', 'author_id', 'content', 'created_at')
-            return [{'name': key, 'extra': 'auto_increment' if key == 'message_id' else '',
-                     'max_length': 10000} for key in fields]
-        fields = ('inquiry_id', 'customer_id', 'head_office_id', 'content', 'response',
-                  'created_at', 'responded_at', 'process', 'review_seq')
-        return [{'name': key, 'extra': 'auto_increment', 'max_length': 2000} for key in fields]
+        fields = ('customer_customer_id', 'head_office_id', 'c_seq', 'contact_post', 'c_date',
+                  'c_answer', 'c_answerdate', 'c_status', 'comment_seq', 'level',
+                  'thread_root_seq', 'parent_c_seq', 'author_role', 'author_id')
+        return [{'name': key, 'extra': 'auto_increment' if key == 'c_seq' else '',
+                 'max_length': 10000} for key in fields]
     monkeypatch.setattr(db, 'query', schema_columns)
     # API 계약 테스트에서는 Firebase Identity Toolkit 호출을 하지 않고 구형 계정 이관 경로를 검증한다.
     monkeypatch.setattr('python.fastapi.login.sign_in_with_password',
@@ -347,6 +344,39 @@ def test_contact_requires_valid_office_configuration(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         commerce.support_head_office()
     assert exc.value.status_code == 503
+
+
+def test_new_inquiry_write_targets_initial_contact_table(monkeypatch):
+    from contextlib import contextmanager
+    from python.fastapi.schemas import ContactCreate
+
+    statements = []
+
+    class Cursor:
+        lastrowid = 41
+
+        def execute(self, sql, params=None):
+            statements.append((sql, params))
+
+        def fetchone(self):
+            return {'customer_id': 'member@example.com'}
+
+    @contextmanager
+    def transaction():
+        yield Cursor()
+
+    commerce = Commerce()
+    monkeypatch.setattr(commerce, 'transaction', transaction)
+    monkeypatch.setattr(commerce, 'support_head_office', lambda: 'HQ004')
+    monkeypatch.setattr(commerce, 'contact', lambda email, contact_id: {'id': contact_id})
+
+    result = commerce.create_contact('member@example.com', ContactCreate(content='문의드립니다'))
+
+    assert result == {'id': 41}
+    insert = next(sql for sql, _ in statements if sql.startswith('INSERT INTO contact'))
+    assert 'customer_support_inquiry' not in insert
+    assert 'inquiry_message' not in insert
+    assert any('UPDATE contact SET thread_root_seq=c_seq' in sql for sql, _ in statements)
 
 
 def test_openapi_contains_frontend_response_contract(api):

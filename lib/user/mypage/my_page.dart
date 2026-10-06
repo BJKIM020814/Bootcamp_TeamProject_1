@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import 'package:bootcamp_teamproject_1/common/fitpick_tab_bar.dart';
 import 'package:bootcamp_teamproject_1/discover/home_page.dart';
 import 'package:bootcamp_teamproject_1/discover/product_list_page.dart';
 import 'package:bootcamp_teamproject_1/discover/store_selection_page.dart';
@@ -32,13 +33,18 @@ class _MyPageState extends State<MyPage> {
   static const Color _panel = Color(0xFFF4F6F7);
 
   final int _tabIndex = 4;
+  DateTime? _lastTabTap;
 
   final MyPageController _c = MyPageController.to;
 
   @override
   void initState() {
     super.initState();
-    _c.load();
+    // 라우트 전환 중 기존 화면의 Obx와 겹쳐 갱신되지 않도록 첫 프레임 뒤 조회한다.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _c.load();
+    });
   }
 
   /// 내 정보 화면에서 돌아오면 바뀐 이름/사이즈를 다시 불러온다.
@@ -394,54 +400,29 @@ class _MyPageState extends State<MyPage> {
     );
   }
 
-  Widget _buildTabBar() {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: Color(0xFFEDEFF1))),
-      ),
-      child: SafeArea(
-        child: SizedBox(
-          height: 64,
-          child: Row(
-            children: [
-              _tabItem(0, Icons.home_outlined, Icons.home, '홈'),
-              _tabItem(1, Icons.grid_view_outlined, Icons.grid_view, '카테고리'),
-              _tabItem(
-                2,
-                Icons.shopping_bag_outlined,
-                Icons.shopping_bag,
-                '장바구니',
-                badge: 1,
-              ),
-              _tabItem(
-                3,
-                Icons.receipt_long_outlined,
-                Icons.receipt_long,
-                '주문내역',
-              ),
-              _tabItem(4, Icons.person_outline, Icons.person, '마이'),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  Widget _buildTabBar() =>
+      FitpickTabBar(selectedIndex: _tabIndex, onSelected: _goToTab);
 
   // 로그인하지 않은 상태라면 로그인 화면으로, 로그인된 상태라면 요청한 화면으로 이동합니다.
   void _goToIfLoggedIn(Widget Function() builder) {
-    Get.to(
+    Get.offAll(
       AuthController.to.isLoggedIn.value ? builder : () => const LoginPage(),
     );
   }
 
   void _goToTab(int index) {
     if (index == _tabIndex) return;
+    final now = DateTime.now();
+    if (_lastTabTap != null &&
+        now.difference(_lastTabTap!) < const Duration(milliseconds: 400)) {
+      return;
+    }
+    _lastTabTap = now;
     switch (index) {
       case 0:
-        Get.to(() => const HomePage());
+        Get.offAll(() => const HomePage());
       case 1:
-        Get.to(() => const ProductListPage());
+        Get.offAll(() => const ProductListPage());
       case 2:
         _goToIfLoggedIn(() => const Cartpage());
       case 3:
@@ -449,42 +430,6 @@ class _MyPageState extends State<MyPage> {
       case 4:
         _goToIfLoggedIn(() => const MyPage());
     }
-  }
-
-  Widget _tabItem(
-    int index,
-    IconData icon,
-    IconData activeIcon,
-    String label, {
-    int badge = 0,
-  }) {
-    final bool selected = _tabIndex == index;
-    final Color color = selected ? _ink : const Color(0xFF8A96A0);
-    return Expanded(
-      child: InkWell(
-        onTap: () => _goToTab(index),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Badge(
-              isLabelVisible: badge > 0 && AuthController.to.isLoggedIn.value,
-              label: Text('$badge'),
-              backgroundColor: const Color(0xFFC0392B),
-              child: Icon(selected ? activeIcon : icon, color: color, size: 26),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                color: color,
-                fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
 

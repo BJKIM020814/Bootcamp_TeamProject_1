@@ -5,17 +5,19 @@
 """
 import base64
 import binascii
+import logging
 from contextlib import contextmanager
 from datetime import timedelta
 from typing import Literal, Optional
 from urllib.parse import quote
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
+from ..dependencies import get_local
 
 from . import repository
 from .schemas import (
-    CartItem, CartItemAdd, CartItemUpdate, CartPickupUpdate, CartResponse, CartSelectAll, CheckoutCoupon,
+    CartItem, CartItemAdd, CartItemUpdate, CartResponse, CartSelectAll, CheckoutCoupon,
     CheckoutResponse, Claim, ClaimCreate, ClaimListResponse, ClaimOptions, ClaimStatusUpdate, CustomerRef,
     OrderCreate, OrderDetail, OrderItem, OrderListResponse, OrderStatusUpdate, OrderSummary, PickupCode,
     PickupConfirm, TimelineStep,
@@ -23,6 +25,7 @@ from .schemas import (
 from ..discover import repository as discover_repository
 from ..discover.schemas import PickupStore, PickupStoreListResponse
 from ..user import mypage_data as md
+from ..schema_guard import require_schema
 
 router = APIRouter(prefix="/api/v1/order", tags=["Order"])
 
@@ -41,6 +44,16 @@ _TIMELINE = [("주문 접수", None), ("결제 완료", "PAID"), ("본사 상품
 _CLAIM_LABELS = {"RECEIVED": "신청 접수", "CONFIRMED": "본사 확인", "VISIT": "방문", "DONE": "완료", "REJECTED": "반려"}
 _CLAIM_STAGE = {"RECEIVED": 0, "CONFIRMED": 1, "VISIT": 2, "DONE": 3, "REJECTED": 3}
 _IMAGE_TYPES = ((b"\xff\xd8\xff", "image/jpeg"), (b"\x89PNG\r\n\x1a\n", "image/png"), (b"RIFF", "image/webp"))
+
+
+def _purchase_schema():
+    # 초기 ERD purchase를 확장하는 SQL 적용 전에는 주문 저장/상세 기능을 막고 원인을 구체적으로 알린다.
+    require_schema('purchase', ['purchase_id', 'order_code', 'customer_customer_id', 'head_office_id',
+                                'p_code', 'p_date', 'p_price', 'quantity', 'order_status', 'orderer_name',
+                                'orderer_phone', 'dealer_seq', 'store_name', 'store_address', 'payment_method',
+                                'coupon_id', 'coupon_name', 'subtotal', 'discount', 'order_total',
+                                'status_changed_at', 'ready_at', 'picked_up_at', 'cancelled_at',
+                                'pickup_code', 'pickup_code_expires'], auto_increment='purchase_id')
 
 
 @contextmanager
@@ -100,11 +113,13 @@ def _summary(order, items):
     status = order["status"]
     return dict(order_number=order["order_number"], ordered_at=order["ordered_at"], status=status,
                 status_label=_STATUS_LABELS[status], status_group=_status_group(status),
-                stage_index=_STAGE_INDEX[status], store_name=order["store_name"], paid_amount=order["paid_amount"],
+                stage_index=_STAGE_INDEX[status], store_name=order["store_name"] or "수령 대리점 배정 대기",
+                paid_amount=order["paid_amount"],
                 items=[_order_item(row) for row in items])
 
 
 def _detail(customer_id, order_number):
+    _purchase_schema()
     order, items = repository.get_order(customer_id, order_number)
     status = order["status"]
     reached = repository.ORDER_FLOW.index(status) if status in repository.ORDER_FLOW else -1
@@ -118,7 +133,8 @@ def _detail(customer_id, order_number):
         **_summary(order, items), orderer_name=order["orderer_name"], orderer_phone=order["orderer_phone"],
         payment_method=order["payment_method"], subtotal=order["subtotal"], discount=order["discount"],
         coupon_name=order["coupon_name"], store_address=order["store_address"],
-        pickup_store=_store(repository.get_dealer(order["dealer_seq"])), timeline=timeline,
+        pickup_store=_store(repository.get_dealer(order["dealer_seq"])) if order["dealer_seq"] else None,
+        timeline=timeline,
         pickup_stage="completed" if status in ("READY", "PICKED_UP") else "preparing",
         picked_up=status == "PICKED_UP", ready_at=ready_at,
         pickup_due_at=ready_at + timedelta(days=repository.PICKUP_HOLD_DAYS) if ready_at else None,
@@ -141,8 +157,7 @@ def cart(customer_id: str):
     items = [_cart_item(row) for row in repository.list_cart(customer_id)]
     selected = [item for item in items if item.selected]
     return CartResponse(items=items, total_count=len(items), selected_count=len(selected),
-                        selected_total=sum(item.line_total for item in selected),
-                        pickup_store=_store(repository.get_cart_pickup(customer_id)))
+                        selected_total=sum(item.line_total for item in selected), pickup_store=None)
 
 
 @router.post("/cart/items", response_model=CartResponse, status_code=201, summary="장바구니 담기 (같은 상품은 수량 합산)")
@@ -158,7 +173,8 @@ def cart_add(body: CartItemAdd):
 def cart_update(cart_item_id: int, body: CartItemUpdate):
     _customer(body.customer_id)
     with _errors():
-        repository.update_cart_item(body.customer_id, cart_item_id, body.quantity, body.selected)
+        repository.update_cart_item(body.customer_id, cart_item_id, body.quantity, body.selected,
+                                    body.product_code)
     return cart(body.customer_id)
 
 
@@ -184,16 +200,8 @@ def cart_remove_selected(customer_id: str):
     return cart(customer_id)
 
 
-@router.put("/cart/pickup-store", response_model=CartResponse, summary="수령 매장 변경")
-def cart_pickup(body: CartPickupUpdate):
-    _customer(body.customer_id)
-    with _errors():
-        repository.set_cart_pickup(body.customer_id, body.dealer_seq)
-    return cart(body.customer_id)
-
-
 # ---------- 주문/결제 (checkoutPage → orderCompletePage) ----------
-@router.get("/checkout", response_model=CheckoutResponse, summary="주문하기 화면 데이터 (선택 상품·결제수단·쿠폰·매장)")
+@router.get("/checkout", response_model=CheckoutResponse, summary="주문하기 화면 데이터 (선택 상품·결제수단·쿠폰)")
 def checkout(customer_id: str):
     _customer(customer_id)
     items = [_cart_item(row) for row in repository.list_cart(customer_id, selected_only=True)]
@@ -203,12 +211,13 @@ def checkout(customer_id: str):
                for row in repository.available_coupons(customer_id)]
     return CheckoutResponse(items=items, subtotal=subtotal, payment_methods=md.PAYMENT_METHODS,
                             default_payment=md.get_payment(customer_id)["default"], coupons=coupons,
-                            pickup_store=_store(repository.get_cart_pickup(customer_id)))
+                            pickup_store=None)
 
 
 @router.post("/orders", response_model=OrderDetail, status_code=201, summary="주문·모의 결제 (장바구니 선택 상품)")
 def order_create(body: OrderCreate):
     _customer(body.customer_id)
+    _purchase_schema()
     with _errors():
         order_number = repository.create_order(body.customer_id, body, md.PAYMENT_METHODS)
         return _detail(body.customer_id, order_number)
@@ -222,6 +231,7 @@ def orders(
     limit: int = Query(default=20, ge=1, le=100), offset: int = Query(default=0, ge=0),
 ):
     _customer(customer_id)
+    _purchase_schema()
     rows, items, total = repository.list_orders(customer_id, status, limit, offset)
     return OrderListResponse(items=[OrderSummary(**_summary(row, items.get(row["order_number"], []))) for row in rows],
                              total=total, limit=limit, offset=offset)
@@ -302,6 +312,7 @@ def _decode_photos(photos):
 
 
 def _claims(customer_id, claim_type=None, claim_id=None):
+    _purchase_schema()
     rows, items, photos = repository.list_claims(customer_id, claim_type, claim_id)
     encoded = quote(customer_id)
     return [Claim(claim_id=row["claim_id"], claim_type=row["claim_type"],
@@ -355,9 +366,24 @@ def claim_photo(claim_id: int, photo_id: int, customer_id: str):
 # ---------- 본사/매장 처리 (앱 화면 진행 상태를 바꾸는 운영·시연용) ----------
 @router.patch("/admin/orders/{order_number}/status", response_model=OrderSummary, tags=["Order (본사)"],
               summary="주문 진행 단계 변경 (한 단계씩)")
-def admin_order_status(order_number: str, body: OrderStatusUpdate):
+def admin_order_status(order_number: str, body: OrderStatusUpdate, local=Depends(get_local)):
+    _purchase_schema()
     with _errors():
-        repository.advance_order(order_number, body.status)
+        order = repository.advance_order(order_number, body.status)
+        labels = {
+            "PREPARING": "본사에서 상품 준비를 시작했습니다.",
+            "SHIPPING": "선택한 수령 대리점으로 상품을 발송했습니다.",
+            "INSPECTING": "상품이 대리점에 도착해 확인 중입니다.",
+            "READY": "매장 수령 준비가 완료되었습니다.",
+        }
+        try:
+            local.add_notification(
+                order["customer_id"], "order", "주문 배송 현황이 변경되었습니다.",
+                f"주문번호 {order_number}: {labels[body.status]} 수령 매장: {order['store_name']}",
+            )
+        except Exception:
+            # 주문 상태는 이미 커밋되었으므로 알림 저장 실패가 본사 상태 변경을 되돌리지 않는다.
+            logging.getLogger(__name__).warning("Order status notification deferred")
         return OrderSummary(**_summary(*repository.get_order(None, order_number)))
 
 

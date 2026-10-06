@@ -1,4 +1,6 @@
 """권한·읽기 부작용·스키마 불일치·Auth 이관 회귀 테스트. 실DB는 사용하지 않는다."""
+from datetime import datetime
+
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
@@ -59,6 +61,44 @@ def test_profile_read_does_not_create_blank_customer(monkeypatch):
     assert md.get_profile('self@example.com')['shoe_size'] is None
 
 
+def test_recently_viewed_records_only_discover_visible_representative(monkeypatch):
+    writes = []
+    monkeypatch.setattr(md, 'ensure_customer', lambda *_: None)
+    monkeypatch.setattr(db, 'query_one', lambda *_: {'p_code': 'P1002'})
+    monkeypatch.setattr(db, 'execute', lambda sql, params: writes.append((sql, params)))
+
+    md.record_view('self@example.com', 'P1002-270')
+
+    insert = next(item for item in writes if item[0].startswith('INSERT INTO recently_viewed'))
+    assert insert[1] == ('self@example.com', 'P1002')
+
+
+def test_recently_viewed_rejects_product_without_discover_image(monkeypatch):
+    from python.fastapi.user.mypage_data import MyPageError
+
+    monkeypatch.setattr(md, 'ensure_customer', lambda *_: None)
+    monkeypatch.setattr(db, 'query_one', lambda *_: {'p_code': None})
+    monkeypatch.setattr(db, 'execute', lambda *_: pytest.fail('hidden product must not be saved'))
+
+    with pytest.raises(MyPageError, match='Discover에 노출되지 않는 상품'):
+        md.record_view('self@example.com', 'hidden-product')
+
+
+def test_recently_viewed_query_filters_hidden_products_and_deduplicates_models(monkeypatch):
+    monkeypatch.setattr(md, 'ensure_customer', lambda *_: None)
+    captured = {}
+
+    def query(sql, params):
+        captured['sql'], captured['params'] = sql, params
+        return []
+
+    monkeypatch.setattr(db, 'query', query)
+    assert md.get_recently_viewed('self@example.com') == []
+    assert 'OCTET_LENGTH(p.p_image) >= 1024' in captured['sql']
+    assert 'MIN(p_code) AS p_code' in captured['sql']
+    assert 'GROUP BY visible.p_code' in captured['sql']
+
+
 def test_coupon_get_does_not_issue(monkeypatch):
     monkeypatch.setattr(md, 'ensure_customer', lambda *_: None)
     monkeypatch.setattr(db, 'query', lambda *_: [])
@@ -74,6 +114,44 @@ def test_schema_guard_blocks_unsupported_write(monkeypatch):
         require_schema('review', ['review_seq', 'context'], auto_increment='review_seq', text_lengths={'context': 46})
     assert error.value.status_code == 409
     assert len(error.value.detail['missing_requirements']) == 2
+    assert 'review.context: 현재 45자' in error.value.detail['message']
+    assert 'restore_legacy_commerce_schema.sql' in error.value.detail['message']
+
+
+def test_purchase_history_query_declares_alias_once(monkeypatch):
+    statements = []
+    monkeypatch.setattr(db, 'query_one', lambda sql, params=None: {'total': 0})
+    monkeypatch.setattr(db, 'query', lambda sql, params=None: statements.append(sql) or [])
+    rows, grouped_items, total = order.repository.list_orders('member@example.com', 'all', 20, 0)
+    assert (rows, grouped_items, total) == ([], {}, 0)
+    assert 'FROM purchase po WHERE' in statements[0]
+    assert 'FROM purchase po po' not in statements[0]
+
+
+def test_order_status_change_adds_customer_notification(tmp_path, monkeypatch):
+    from datetime import datetime
+    from python.fastapi.local_store import LocalStore
+    from python.fastapi.order.schemas import OrderStatusUpdate
+
+    local = LocalStore(tmp_path / 'order-notification.sqlite3')
+    local.initialize()
+    monkeypatch.setattr(order, '_purchase_schema', lambda: None)
+    monkeypatch.setattr(order.repository, 'advance_order', lambda *_: {
+        'customer_id': 'buyer@example.com', 'store_name': '홍대점',
+    })
+    monkeypatch.setattr(order.repository, 'get_order', lambda *_: ({}, []))
+    monkeypatch.setattr(order, '_summary', lambda *_: {
+        'order_number': 'FPTEST', 'ordered_at': datetime.now(), 'status': 'SHIPPING',
+        'status_label': '대리점으로 발송', 'status_group': 'in_progress', 'stage_index': 2,
+        'store_name': '홍대점', 'paid_amount': 120000, 'items': [],
+    })
+
+    result = order.admin_order_status('FPTEST', OrderStatusUpdate(status='SHIPPING'), local)
+
+    notifications = local.notifications('buyer@example.com', 20, 0)
+    assert result.order_number == 'FPTEST'
+    assert notifications['total'] == notifications['unreadCount'] == 1
+    assert '홍대점' in notifications['items'][0]['body']
 
 
 def test_existing_auth_user_cannot_use_legacy_password(monkeypatch):
@@ -107,10 +185,10 @@ def test_variant_codes_remain_bound_to_color_size(monkeypatch):
     assert result.price == 1000
 
 
-def test_variant_lookup_groups_only_real_sku_family_rows(monkeypatch):
+def test_variant_lookup_groups_persisted_options_across_color_sku_families(monkeypatch):
     product = dict(p_code='A', p_name='shoe', b_name='brand', p_price=1000,
                    p_sku='SKU-AR-001-250', p_gender='공용', p_size=250, p_color='white', image_bytes=0)
-    rows = [product, dict(product, p_code='B', p_sku='SKU-AR-001-270', p_size=270, p_color='white')]
+    rows = [product, dict(product, p_code='B', p_sku='SKU-AR-BLACK-270', p_size=270, p_color='black')]
     calls = []
 
     def query(sql, params):
@@ -120,7 +198,95 @@ def test_variant_lookup_groups_only_real_sku_family_rows(monkeypatch):
     monkeypatch.setattr(discover.repository.db, 'query', query)
     result = discover.repository.get_variants(product)
     assert [row['p_code'] for row in result] == ['A', 'B']
-    assert calls[0][1] == ('SKU-AR-001-%', 'brand', 'shoe', '공용')
+    assert calls[0][1] == ('brand', 'shoe', '공용')
+    assert 'p_size > 0' in calls[0][0]
+
+
+def test_product_reviews_include_reviews_on_sibling_size_skus(monkeypatch):
+    statements = []
+    monkeypatch.setattr(discover.repository.db, 'query_one',
+                        lambda sql, params: statements.append((sql, params)) or {'total': 2})
+    monkeypatch.setattr(discover.repository.db, 'query',
+                        lambda sql, params: statements.append((sql, params)) or [])
+
+    rows, total = discover.repository.list_reviews('P1013-250', 20, 0)
+
+    assert rows == [] and total == 2
+    assert len(statements) == 2
+    for sql, params in statements:
+        assert 'selected.p_name = reviewed.p_name' in sql
+        assert 'selected.b_name = reviewed.b_name' in sql
+        assert 'selected.p_gender = reviewed.p_gender' in sql
+        assert params[0] == 'P1013-250'
+
+
+def test_product_review_response_includes_image_url_only_when_blob_exists(monkeypatch):
+    monkeypatch.setattr(discover.repository, 'get_product', lambda *_: {'p_code': 'A'})
+    monkeypatch.setattr(discover.repository, 'list_reviews', lambda *_: ([
+        {'review_seq': 12, 'customer_customer_id': 'member@example.com',
+         'r_date': datetime(2026, 10, 1), 'context': 'review', 'r_fit': '정사이즈',
+         'rating': 5, 'likecount': 0, 'image_bytes': 2048},
+        {'review_seq': 13, 'customer_customer_id': 'member@example.com',
+         'r_date': datetime(2026, 10, 1), 'context': 'review without image', 'r_fit': '정사이즈',
+         'rating': 4, 'likecount': 0, 'image_bytes': None},
+        {'review_seq': 14, 'customer_customer_id': 'member@example.com',
+         'r_date': datetime(2026, 10, 1), 'context': 'broken header only', 'r_fit': '정사이즈',
+         'rating': 3, 'likecount': 0, 'image_bytes': 10},
+    ], 3))
+
+    result = discover.product_reviews('A')
+
+    assert result.items[0].image_url == '/api/v1/discover/reviews/12/image'
+    assert result.items[1].image_url is None
+    assert result.items[2].image_url is None
+
+
+def test_review_image_endpoint_returns_image_content_type(monkeypatch):
+    monkeypatch.setattr(discover.repository, 'get_review_image',
+                        lambda review_id: b'\x89PNG\r\n\x1a\nexample')
+
+    response = discover.review_image(12)
+
+    assert response.media_type == 'image/png'
+    assert response.body.startswith(b'\x89PNG')
+
+
+def test_product_listing_groups_skus_by_display_name(monkeypatch):
+    statements = []
+    product = dict(p_code='P2001-240', p_name='shoe', b_name='brand', p_price='1000',
+                   p_sku='SKU-SHOE-WH-240', p_gender='공용', p_size=240, p_color='white', image_bytes=0)
+    monkeypatch.setattr(discover.repository.db, 'query_one', lambda sql, params=None: {'total': 1})
+    monkeypatch.setattr(discover.repository.db, 'query', lambda sql, params=None: statements.append(sql) or [product])
+    rows, total = discover.repository.list_products(limit=20)
+    assert total == 1 and len(rows) == 1
+    assert 'GROUP BY p_name,b_name,p_gender' in statements[0]
+    assert all('OCTET_LENGTH(p_image) >= 1024' in sql for sql in statements)
+    assert all('0xFFD8FF' in sql for sql in statements)
+
+
+def test_purpose_filter_uses_product_usage_column(monkeypatch):
+    statements = []
+    monkeypatch.setattr(discover.repository.db, 'query_one', lambda *_: {'total': 0})
+    monkeypatch.setattr(discover.repository.db, 'query',
+                        lambda sql, params=None: statements.append((sql, params)) or [])
+    discover.repository.list_products(purpose='데일리')
+    assert all('p_usage = %s' in sql for sql, _ in statements)
+    assert all('product_purpose' not in sql for sql, _ in statements)
+    assert all('데일리' in params for _, params in statements)
+
+
+def test_available_purposes_come_from_product_usage(monkeypatch):
+    statements = []
+    def query(sql, _params=None):
+        statements.append(sql)
+        if 'SELECT DISTINCT p_usage' in sql:
+            return [{'p_usage': '데일리'}]
+        return []
+    monkeypatch.setattr(discover.repository.db, 'query', query)
+    _, _, purposes = discover.repository.filters()
+    assert purposes == ['데일리']
+    assert any('FROM product' in sql and 'p_usage' in sql for sql in statements)
+    assert all('product_purpose' not in sql for sql in statements)
 
 
 def test_cart_storage_is_sqlite_and_does_not_require_mysql_order_tables(tmp_path, monkeypatch):
@@ -148,11 +314,11 @@ def test_cart_storage_is_sqlite_and_does_not_require_mysql_order_tables(tmp_path
     assert order.repository.list_cart('buyer@example.com', selected_only=True) == []
 
 
-def test_mock_checkout_writes_purchase_order_schema_and_clears_sqlite_cart(tmp_path, monkeypatch):
+def test_mock_checkout_writes_initial_purchase_schema_and_clears_sqlite_cart(tmp_path, monkeypatch):
     from contextlib import contextmanager
     from python.fastapi.order.schemas import OrderCreate
 
-    local = LocalStore(tmp_path / 'purchase-order-test.sqlite3')
+    local = LocalStore(tmp_path / 'purchase-test.sqlite3')
     local.initialize()
     with local.connection() as conn:
         conn.execute(
@@ -169,7 +335,7 @@ def test_mock_checkout_writes_purchase_order_schema_and_clears_sqlite_cart(tmp_p
             if 'FROM product WHERE p_code IN' in sql:
                 self.rows = [{'p_code': 'P1002', 'p_name': 'Runner', 'b_name': 'Brand',
                               'p_price': '129,000', 'p_color': 'White', 'p_size': 250}]
-            elif 'FROM authorized_dealer WHERE seq' in sql:
+            elif 'FROM authorized_dealer' in sql:
                 self.rows = [{'seq': 2, 'name': 'Central Store', 'address': 'Seoul'}]
             elif 'FROM head_office WHERE division' in sql:
                 self.rows = [{'id': 'HQ003'}]
@@ -203,19 +369,19 @@ def test_mock_checkout_writes_purchase_order_schema_and_clears_sqlite_cart(tmp_p
     )
 
     sql = '\n'.join(statement for statement, _ in cursor.statements)
-    assert order_code == 'FP73'
-    assert 'INSERT INTO purchase_order (' in sql
-    assert 'INSERT INTO purchase_order_detail (' in sql
-    assert 'INSERT INTO purchase_order_item (' in sql
-    assert 'shop_order' not in sql
-    order_params = next(params for statement, params in cursor.statements
-                        if statement.startswith('INSERT INTO purchase_order ('))
-    assert order_params[:2] == ('buyer@example.com', 'HQ003')
-    assert order_params[2] is not None
-    assert order_params[3] == 258000
-    item_rows = next(rows for statement, rows in cursor.statements
-                     if statement.startswith('INSERT INTO purchase_order_item'))
-    assert item_rows == [(73, 'P1002', 2, 129000)]
+    assert order_code.startswith('FP') and len(order_code) == 20
+    assert 'INSERT INTO purchase (' in sql
+    assert 'purchase_order_item' not in sql
+    assert 'authorized_dealer' in sql
+    order_rows = next(rows for statement, rows in cursor.statements
+                      if statement.startswith('INSERT INTO purchase ('))
+    assert len(order_rows) == 1
+    order_row = order_rows[0]
+    assert order_row[1:4] == ('buyer@example.com', 'HQ003', 'P1002')
+    assert order_row[6] == 2
+    assert order_row[7:13] == ('Buyer', '010-1234-5678', 2, 'Central Store', 'Seoul', '신용 / 체크카드')
+    assert order_row[15:18] == (258000, 0, 258000)
+    assert order_row[18] is not None
     with local.connection() as conn:
         assert conn.execute('SELECT COUNT(*) FROM cart_items').fetchone()[0] == 0
 
@@ -245,12 +411,19 @@ def test_cart_api_no_longer_checks_mysql_order_schema(client, monkeypatch):
 
 
 def test_home_banners_use_database_rows_and_binary_images(monkeypatch):
-    monkeypatch.setattr(discover.repository, 'list_banners', lambda: [{'seq': 2}, {'seq': 7}])
-    monkeypatch.setattr(discover.repository, 'get_banner_image', lambda seq: b'jpeg-bytes' if seq == 2 else None)
+    statements = []
+    monkeypatch.setattr(discover.repository.db, 'query',
+                        lambda sql, params=None: statements.append((sql, params)) or
+                        [{'seq': 4}, {'seq': 5}, {'seq': 6}])
+    monkeypatch.setattr(discover.repository, 'get_banner_image',
+                        lambda seq: b'\x89PNG\r\n\x1a\nimage-bytes' if seq == 4 else None)
 
     result = discover.banners()
-    assert [item.seq for item in result.items] == [2, 7]
-    assert discover.banner_image(2).body == b'jpeg-bytes'
+    assert [item.seq for item in result.items] == [4, 5, 6]
+    assert statements == [("SELECT seq FROM banner_image WHERE seq BETWEEN %s AND %s ORDER BY seq", (4, 6))]
+    image = discover.banner_image(4)
+    assert image.body == b'\x89PNG\r\n\x1a\nimage-bytes'
+    assert image.media_type == 'image/png'
     with pytest.raises(HTTPException) as error:
-        discover.banner_image(7)
+        discover.banner_image(6)
     assert error.value.status_code == 404

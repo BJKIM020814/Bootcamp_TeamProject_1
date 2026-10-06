@@ -19,12 +19,14 @@ class OrderItem(Output):
     paid_amount: int
     refund_excluded_amount: int
     refunded: bool
-    # The legacy purchase table does not contain these relations/status fields.
+    # 초기 purchase의 migration 확장 컬럼. 구형 이력 행은 기본값/NULL일 수 있다.
     quantity: Optional[int] = None
     pickup_status: Optional[str] = None
     dealer_id: Optional[int] = None
+    dealer_name: Optional[str] = None
+    dealer_address: Optional[str] = None
     payment_info: Optional[dict] = None
-    # 주문 테이블 기준 식별자/진행 상태. 레거시 purchase 행에는 존재하지 않는다.
+    # 초기 purchase의 행/주문 식별자와 상태.
     order_number: Optional[str] = None
     order_item_id: Optional[int] = None
     order_status: Optional[str] = None

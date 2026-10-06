@@ -1,4 +1,5 @@
 import 'package:bootcamp_teamproject_1/discover/discover_api.dart';
+import 'package:bootcamp_teamproject_1/common/fitpick_tab_bar.dart';
 import 'package:bootcamp_teamproject_1/discover/product_detail_page.dart';
 import 'package:bootcamp_teamproject_1/discover/product_list_page.dart';
 import 'package:bootcamp_teamproject_1/discover/store_selection_page.dart';
@@ -7,7 +8,9 @@ import 'package:bootcamp_teamproject_1/order/orderHistoryPage.dart';
 import 'package:bootcamp_teamproject_1/user/authController.dart';
 import 'package:bootcamp_teamproject_1/user/loginpage.dart';
 import 'package:bootcamp_teamproject_1/user/mypage/my_page.dart';
+import 'package:bootcamp_teamproject_1/user/mypage/notificationpage.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 
 /// 홈의 상품·대상·브랜드·배너는 FastAPI가 반환한 DB 레코드만 표시한다.
 class HomePage extends StatefulWidget {
@@ -92,7 +95,11 @@ class _HomePageState extends State<HomePage> {
             ),
             const Spacer(),
             IconButton(
-              onPressed: () {},
+              onPressed: () => Get.to(
+                () => AuthController.to.isLoggedIn.value
+                    ? const NotificationPage()
+                    : const LoginPage(),
+              ),
               icon: const Icon(Icons.notifications_none_rounded),
             ),
           ],
@@ -302,44 +309,25 @@ class _HomePageState extends State<HomePage> {
     ),
   );
 
-  Widget _buildNavigation() => NavigationBar(
+  Widget _buildNavigation() => FitpickTabBar(
     selectedIndex: 0,
-    onDestinationSelected: (index) {
+    onSelected: (index) {
       switch (index) {
         case 1:
-          _openProductList();
+          Get.offAll(
+            () => ProductListPage(initialBrand: _brand, initialGender: _gender),
+          );
         case 2:
-          _openIfLoggedIn(() => const Cartpage());
+          _switchTab(() => const Cartpage(), requiresLogin: true);
         case 3:
-          _openIfLoggedIn(() => const Orderhistorypage());
+          _switchTab(() => const Orderhistorypage(), requiresLogin: true);
         case 4:
-          _openIfLoggedIn(() => const MyPage());
+          _switchTab(() => const MyPage(), requiresLogin: true);
       }
     },
-    height: 66,
-    labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-    destinations: const [
-      NavigationDestination(
-        icon: Icon(Icons.home_outlined),
-        selectedIcon: Icon(Icons.home_rounded),
-        label: '홈',
-      ),
-      NavigationDestination(icon: Icon(Icons.grid_view_rounded), label: '카테고리'),
-      NavigationDestination(
-        icon: Icon(Icons.shopping_bag_outlined),
-        label: '장바구니',
-      ),
-      NavigationDestination(
-        icon: Icon(Icons.receipt_long_outlined),
-        label: '주문내역',
-      ),
-      NavigationDestination(
-        icon: Icon(Icons.person_outline_rounded),
-        label: '마이',
-      ),
-    ],
   );
 
+  /// 홈 콘텐츠 안의 탐색 링크는 일반 페이지 이동으로 유지한다.
   void _openProductList() => Navigator.of(context).push(
     MaterialPageRoute(
       builder: (_) =>
@@ -357,11 +345,11 @@ class _HomePageState extends State<HomePage> {
     context,
   ).push(MaterialPageRoute(builder: (_) => const StoreSelectionPage()));
 
-  void _openIfLoggedIn(Widget Function() builder) {
+  void _switchTab(Widget Function() builder, {bool requiresLogin = false}) {
     final target = AuthController.to.isLoggedIn.value
         ? builder()
-        : const LoginPage();
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => target));
+        : (requiresLogin ? const LoginPage() : builder());
+    Get.offAll(() => target);
   }
 }
 

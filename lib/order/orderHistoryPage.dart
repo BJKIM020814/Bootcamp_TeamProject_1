@@ -1,10 +1,16 @@
 import 'package:bootcamp_teamproject_1/order/cartPage.dart';
+import 'package:bootcamp_teamproject_1/common/fitpick_tab_bar.dart';
+import 'package:bootcamp_teamproject_1/discover/home_page.dart';
+import 'package:bootcamp_teamproject_1/discover/product_list_page.dart';
 import 'package:bootcamp_teamproject_1/order/exchangeHistoryPage.dart';
 import 'package:bootcamp_teamproject_1/order/exchangeRequestPage.dart';
 import 'package:bootcamp_teamproject_1/order/orderApi.dart';
 import 'package:bootcamp_teamproject_1/order/orderDetailPage.dart';
 import 'package:bootcamp_teamproject_1/order/returnRequestPage.dart';
 import 'package:bootcamp_teamproject_1/user/mypage/reviewwritepage.dart';
+import 'package:bootcamp_teamproject_1/user/authController.dart';
+import 'package:bootcamp_teamproject_1/user/loginpage.dart';
+import 'package:bootcamp_teamproject_1/user/mypage/my_page.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -77,7 +83,8 @@ class _OrderhistorypageState extends State<Orderhistorypage> {
     _load();
   }
 
-  void _openExchangeReturnHistory() => Get.to(() => const Exchangehistorypage());
+  void _openExchangeReturnHistory() =>
+      Get.to(() => const Exchangehistorypage());
 
   void _writeReview() => Get.to(() => const ReviewWritePage());
 
@@ -95,6 +102,10 @@ class _OrderhistorypageState extends State<Orderhistorypage> {
           ),
         ],
       ),
+      bottomNavigationBar: FitpickTabBar(
+        selectedIndex: 3,
+        onSelected: _selectAppTab,
+      ),
       body: SafeArea(
         child: Column(
           children: [
@@ -110,7 +121,10 @@ class _OrderhistorypageState extends State<Orderhistorypage> {
                   children: [
                     Text(
                       '본사 발송부터 매장 픽업까지 안전하게 확인하세요.',
-                      style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                      ),
                     ),
                     const SizedBox(height: 20),
                     if (_error != null)
@@ -157,6 +171,21 @@ class _OrderhistorypageState extends State<Orderhistorypage> {
     );
   }
 
+  void _selectAppTab(int index) {
+    if (index == 3) return;
+    final authenticated = AuthController.to.isLoggedIn.value;
+    switch (index) {
+      case 0:
+        Get.offAll(() => const HomePage());
+      case 1:
+        Get.offAll(() => const ProductListPage());
+      case 2:
+        Get.offAll(() => authenticated ? const Cartpage() : const LoginPage());
+      case 4:
+        Get.offAll(() => authenticated ? const MyPage() : const LoginPage());
+    }
+  }
+
   Widget _buildErrorState(String message) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 40),
@@ -181,7 +210,9 @@ class _OrderhistorypageState extends State<Orderhistorypage> {
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: _filterIndex == i ? Colors.black : Colors.grey.shade100,
+                  color: _filterIndex == i
+                      ? Colors.black
+                      : Colors.grey.shade100,
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
@@ -189,7 +220,9 @@ class _OrderhistorypageState extends State<Orderhistorypage> {
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color: _filterIndex == i ? Colors.white : Colors.grey.shade700,
+                    color: _filterIndex == i
+                        ? Colors.white
+                        : Colors.grey.shade700,
                   ),
                 ),
               ),
@@ -234,7 +267,10 @@ class _OrderhistorypageState extends State<Orderhistorypage> {
                   children: [
                     Text(
                       formatDate(order.orderedAt),
-                      style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey.shade500,
+                      ),
                     ),
                     Text(
                       order.orderNumber,
@@ -267,8 +303,10 @@ class _OrderhistorypageState extends State<Orderhistorypage> {
                       : Image.network(
                           first.imageUrl!,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) =>
-                              const Icon(Icons.image_outlined, color: Colors.grey),
+                          errorBuilder: (_, _, _) => const Icon(
+                            Icons.image_outlined,
+                            color: Colors.grey,
+                          ),
                         ),
                 ),
                 const SizedBox(width: 12),
@@ -295,7 +333,10 @@ class _OrderhistorypageState extends State<Orderhistorypage> {
                       const SizedBox(height: 4),
                       Text(
                         first.optionLabel,
-                        style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
                       ),
                       const SizedBox(height: 6),
                       Row(
@@ -326,11 +367,18 @@ class _OrderhistorypageState extends State<Orderhistorypage> {
           const SizedBox(height: 14),
           Row(
             children: [
-              Icon(Icons.location_on_outlined, size: 16, color: Colors.grey.shade600),
+              Icon(
+                Icons.location_on_outlined,
+                size: 16,
+                color: Colors.grey.shade600,
+              ),
               const SizedBox(width: 6),
               Text(
                 order.storeName,
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               const Spacer(),
               Text(
@@ -356,7 +404,10 @@ class _OrderhistorypageState extends State<Orderhistorypage> {
     final fg = cancelled ? Colors.grey.shade600 : const Color(0xFF1F5A46);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: Text(
         order.statusLabel,
         style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: fg),
@@ -380,7 +431,9 @@ class _OrderhistorypageState extends State<Orderhistorypage> {
                   Expanded(
                     child: Container(
                       height: 2,
-                      color: i == 0 ? Colors.transparent : (i <= stageIndex ? green : grey),
+                      color: i == 0
+                          ? Colors.transparent
+                          : (i <= stageIndex ? green : grey),
                     ),
                   ),
                   Container(
@@ -448,7 +501,9 @@ class _OrderhistorypageState extends State<Orderhistorypage> {
         children: [
           Row(
             children: [
-              Expanded(child: _outlined('상세 보기', () => _openOrderDetailFor(order))),
+              Expanded(
+                child: _outlined('상세 보기', () => _openOrderDetailFor(order)),
+              ),
               const SizedBox(width: 10),
               Expanded(child: _filled('리뷰 작성', _writeReview)),
             ],
@@ -456,9 +511,13 @@ class _OrderhistorypageState extends State<Orderhistorypage> {
           const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(child: _outlined('교환 신청', () => _openExchangeRequest(order))),
+              Expanded(
+                child: _outlined('교환 신청', () => _openExchangeRequest(order)),
+              ),
               const SizedBox(width: 10),
-              Expanded(child: _outlined('반품 신청', () => _openReturnRequest(order))),
+              Expanded(
+                child: _outlined('반품 신청', () => _openReturnRequest(order)),
+              ),
             ],
           ),
         ],
