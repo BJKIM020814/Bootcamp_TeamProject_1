@@ -116,18 +116,24 @@ class PickupStore {
     required this.name,
     required this.address,
     required this.manager,
+    this.latitude,
+    this.longitude,
   });
 
   final int id;
   final String name;
   final String address;
   final String manager;
+  final double? latitude;
+  final double? longitude;
 
   factory PickupStore.fromJson(Map<String, dynamic> json) => PickupStore(
     id: json['seq'] as int,
     name: json['name'] as String,
     address: json['address'] as String,
     manager: json['manager'] as String,
+    latitude: (json['latitude'] as num?)?.toDouble(),
+    longitude: (json['longitude'] as num?)?.toDouble(),
   );
 }
 

@@ -73,6 +73,14 @@ def _customer(customer_id):
         md.ensure_customer(customer_id)
 
 
+def _record_order_notification(local, customer_id, title, body):
+    """기본 주문 알림 설정을 따르며, 알림 저장 실패로 완료된 업무를 실패 처리하지 않는다."""
+    try:
+        local.add_notification(customer_id, "order", title, body)
+    except Exception:
+        logging.getLogger(__name__).warning("Order notification deferred")
+
+
 def _image_url(row):
     return f"/api/v1/discover/products/{row['p_code']}/image" if row.get("image_bytes") else None
 
@@ -215,12 +223,17 @@ def checkout(customer_id: str):
 
 
 @router.post("/orders", response_model=OrderDetail, status_code=201, summary="주문·모의 결제 (장바구니 선택 상품)")
-def order_create(body: OrderCreate):
+def order_create(body: OrderCreate, local=Depends(get_local)):
     _customer(body.customer_id)
     _purchase_schema()
     with _errors():
         order_number = repository.create_order(body.customer_id, body, md.PAYMENT_METHODS)
-        return _detail(body.customer_id, order_number)
+        detail = _detail(body.customer_id, order_number)
+        _record_order_notification(
+            local, body.customer_id, "주문이 접수되었습니다.",
+            f"주문번호 {order_number}: {detail.store_name} 픽업 주문이 접수되었습니다.",
+        )
+        return detail
 
 
 # ---------- 주문내역/상세 (orderHistoryPage, orderDetailPage) ----------
@@ -245,11 +258,16 @@ def order_detail(order_number: str, customer_id: str):
 
 
 @router.post("/orders/{order_number}/cancel", response_model=OrderDetail, summary="주문 취소 (발송 전까지, 쿠폰 복원)")
-def order_cancel(order_number: str, body: CustomerRef):
+def order_cancel(order_number: str, body: CustomerRef, local=Depends(get_local)):
     _customer(body.customer_id)
     with _errors():
         repository.cancel_order(body.customer_id, order_number)
-        return _detail(body.customer_id, order_number)
+        detail = _detail(body.customer_id, order_number)
+        _record_order_notification(
+            local, body.customer_id, "주문 취소가 처리되었습니다.",
+            f"주문번호 {order_number}: 주문 취소가 완료되었습니다.",
+        )
+        return detail
 
 
 # ---------- 매장 수령 (pickupQrPage) ----------
@@ -265,10 +283,18 @@ def pickup_code(order_number: str, body: CustomerRef):
 
 
 @router.post("/orders/{order_number}/pickup", response_model=OrderDetail, summary="수령 완료 처리 (인증번호 확인)")
-def pickup_confirm(order_number: str, body: PickupConfirm):
+def pickup_confirm(order_number: str, body: PickupConfirm, local=Depends(get_local)):
     _customer(body.customer_id)
     with _errors():
-        repository.confirm_pickup(body.customer_id, order_number, body.code.replace(" ", ""))
+        order = repository.confirm_pickup(body.customer_id, order_number, body.code.replace(" ", ""))
+        try:
+            local.add_notification(
+                order["customer_id"], "order", "주문 수령이 완료되었습니다.",
+                f"주문번호 {order_number}: {order['store_name']}에서 상품 수령이 완료되었습니다.",
+            )
+        except Exception:
+            # 주문 완료는 이미 커밋되었으므로 알림 저장 실패가 수령 처리를 되돌리지 않는다.
+            logging.getLogger(__name__).warning("Pickup notification deferred")
         return _detail(body.customer_id, order_number)
 
 
@@ -327,7 +353,7 @@ def _claims(customer_id, claim_type=None, claim_id=None):
 
 
 @router.post("/claims", response_model=Claim, status_code=201, summary="교환·반품 신청 (사진 base64 최대 3장)")
-def claim_create(body: ClaimCreate):
+def claim_create(body: ClaimCreate, local=Depends(get_local)):
     _customer(body.customer_id)
     if body.reason not in CLAIM_REASONS:
         raise HTTPException(status_code=422, detail={"code": "INVALID_REASON", "message": "신청 사유를 선택해 주세요."})
@@ -336,7 +362,13 @@ def claim_create(body: ClaimCreate):
     photos = _decode_photos(body.photos)
     with _errors():
         claim_id = repository.create_claim(body.customer_id, body, photos)
-    return _claims(body.customer_id, claim_id=claim_id)[0]
+    claim = _claims(body.customer_id, claim_id=claim_id)[0]
+    claim_kind = "교환" if body.claim_type == "EXCHANGE" else "환불(반품)"
+    _record_order_notification(
+        local, body.customer_id, f"{claim_kind} 신청이 접수되었습니다.",
+        f"주문번호 {body.order_number}: {claim_kind} 신청을 접수했습니다. 처리 결과는 알림으로 안내합니다.",
+    )
+    return claim
 
 
 @router.get("/claims", response_model=ClaimListResponse, summary="교환·반품 내역")
@@ -370,16 +402,17 @@ def admin_order_status(order_number: str, body: OrderStatusUpdate, local=Depends
     _purchase_schema()
     with _errors():
         order = repository.advance_order(order_number, body.status)
-        labels = {
-            "PREPARING": "본사에서 상품 준비를 시작했습니다.",
-            "SHIPPING": "선택한 수령 대리점으로 상품을 발송했습니다.",
-            "INSPECTING": "상품이 대리점에 도착해 확인 중입니다.",
-            "READY": "매장 수령 준비가 완료되었습니다.",
+        notifications = {
+            "PREPARING": ("상품 준비가 시작되었습니다.", "본사에서 상품 준비를 시작했습니다."),
+            "SHIPPING": ("상품 발송이 시작되었습니다.", "선택한 수령 대리점으로 상품을 발송했습니다."),
+            "INSPECTING": ("상품이 매장에 도착했습니다.", "상품이 대리점에 도착해 확인 중입니다."),
+            "READY": ("매장 수령을 준비했습니다.", "매장 수령 준비가 완료되었습니다."),
         }
         try:
+            title, message = notifications[body.status]
             local.add_notification(
-                order["customer_id"], "order", "주문 배송 현황이 변경되었습니다.",
-                f"주문번호 {order_number}: {labels[body.status]} 수령 매장: {order['store_name']}",
+                order["customer_id"], "order", title,
+                f"주문번호 {order_number}: {message} 수령 매장: {order['store_name']}",
             )
         except Exception:
             # 주문 상태는 이미 커밋되었으므로 알림 저장 실패가 본사 상태 변경을 되돌리지 않는다.
@@ -388,7 +421,17 @@ def admin_order_status(order_number: str, body: OrderStatusUpdate, local=Depends
 
 
 @router.patch("/admin/claims/{claim_id}/status", summary="교환·반품 처리 단계 변경", tags=["Order (본사)"])
-def admin_claim_status(claim_id: int, body: ClaimStatusUpdate):
+def admin_claim_status(claim_id: int, body: ClaimStatusUpdate, local=Depends(get_local)):
     with _errors():
-        repository.advance_claim(claim_id, body.status)
+        claim = repository.advance_claim(claim_id, body.status)
+    kind = "교환" if claim["claim_type"] == "EXCHANGE" else "환불(반품)"
+    if body.status == "REJECTED":
+        title, message = f"{kind} 신청이 반려되었습니다.", f"주문번호 {claim['order_number']}의 {kind} 신청이 반려되었습니다."
+    elif body.status == "DONE":
+        title = "교환 처리가 완료되었습니다." if claim["claim_type"] == "EXCHANGE" else "환불 처리가 완료되었습니다."
+        message = f"주문번호 {claim['order_number']}의 {kind} 처리가 완료되었습니다."
+    else:
+        stage = {"CONFIRMED": "본사에서 신청을 확인했습니다.", "VISIT": "매장 방문 처리를 진행 중입니다."}[body.status]
+        title, message = f"{kind} 처리 상황이 변경되었습니다.", f"주문번호 {claim['order_number']}: {stage}"
+    _record_order_notification(local, claim["customer_id"], title, message)
     return {"claim_id": claim_id, "status": body.status, "status_label": _CLAIM_LABELS[body.status]}

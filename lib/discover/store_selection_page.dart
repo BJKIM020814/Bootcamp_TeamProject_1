@@ -1,5 +1,9 @@
 import 'package:bootcamp_teamproject_1/discover/discover_api.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_naver_map/flutter_naver_map.dart';
+
+const _naverMapClientId = String.fromEnvironment('NAVER_MAP_CLIENT_ID');
 
 /// 본사 발송 상품의 픽업 지점만 조회한다. 대리점 재고·판매 가능 여부는 판단하지 않는다.
 class StoreSelectionPage extends StatefulWidget {
@@ -141,6 +145,8 @@ class _StoreSelectionPageState extends State<StoreSelectionPage> {
               ),
             ),
             const SizedBox(height: 16),
+            _buildMap(stores),
+            const SizedBox(height: 18),
             if (stores.isEmpty)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 50),
@@ -171,6 +177,77 @@ class _StoreSelectionPageState extends State<StoreSelectionPage> {
           ],
         );
       },
+    ),
+  );
+
+  /// Naver Dynamic Map에 DB 좌표가 유효한 픽업 매장만 표시한다.
+  Widget _buildMap(List<PickupStore> stores) {
+    if (kIsWeb) {
+      return _mapNotice('네이버 지도는 iOS·Android 앱에서 확인할 수 있습니다.');
+    }
+    if (_naverMapClientId.trim().isEmpty) {
+      return _mapNotice(
+        '.env에 NAVER_MAP_CLIENT_ID를 설정한 뒤 tool/run_flutter_with_env.sh로 실행해 주세요.',
+      );
+    }
+    final locatedStores = stores.where((store) {
+      final latitude = store.latitude;
+      final longitude = store.longitude;
+      return latitude != null &&
+          longitude != null &&
+          latitude >= -90 &&
+          latitude <= 90 &&
+          longitude >= -180 &&
+          longitude <= 180;
+    }).toList();
+    if (locatedStores.isEmpty) {
+      return _mapNotice('지도에 표시할 위도·경도 정보가 등록된 매장이 없습니다.');
+    }
+
+    final center = NLatLng(
+      locatedStores.first.latitude!,
+      locatedStores.first.longitude!,
+    );
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: SizedBox(
+        height: 250,
+        child: NaverMap(
+          options: NaverMapViewOptions(
+            initialCameraPosition: NCameraPosition(
+              target: center,
+              zoom: locatedStores.length == 1 ? 14 : 7,
+            ),
+          ),
+          onMapReady: (controller) async {
+            await controller.addOverlayAll({
+              for (final store in locatedStores)
+                NMarker(
+                  id: 'pickup-store-${store.id}',
+                  position: NLatLng(store.latitude!, store.longitude!),
+                  caption: NOverlayCaption(text: store.name),
+                ),
+            });
+          },
+        ),
+      ),
+    );
+  }
+
+  /// 설정·좌표 누락 시 빈 지도를 띄우지 않고 원인을 안내한다.
+  Widget _mapNotice(String message) => Container(
+    width: double.infinity,
+    height: 150,
+    alignment: Alignment.center,
+    padding: const EdgeInsets.all(20),
+    decoration: BoxDecoration(
+      color: const Color(0xFFF3F1EE),
+      borderRadius: BorderRadius.circular(16),
+    ),
+    child: Text(
+      message,
+      textAlign: TextAlign.center,
+      style: const TextStyle(color: Color(0xFF6E675F), height: 1.5),
     ),
   );
 }

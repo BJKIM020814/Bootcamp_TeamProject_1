@@ -41,12 +41,10 @@ dependencies:
   sqflite: ^2.4.4
 # imagePicker
   image_picker: ^1.2.3
-# Map
-  flutter_map: ^8.3.2
-# geolocator
+  # Naver mobile maps
+  flutter_naver_map: ^1.4.4
+# Geolocation
   geolocator: ^14.1.1
-# latlong2
-  latlong2: ^0.10.1 # 지도를 현 위치로 이동
 # Slidable
   flutter_slidable: ^4.0.3
 # http
